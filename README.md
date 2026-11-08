@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%2012%2B-lightgrey)](https://github.com/WyattYiu/hard-sub-extractor)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/WyattYiu/hard-sub-extractor)
 
-**当前版本：v1.6.0** · [下载 Release](https://github.com/WyattYiu/hard-sub-extractor/releases/latest) · [更新日志](CHANGELOG.md)
+**当前版本：v1.6.1** · [下载 Release](https://github.com/WyattYiu/hard-sub-extractor/releases/latest) · [更新日志](CHANGELOG.md)
 
 从视频画面里提取**硬字幕**（烧录在画面上的字幕），生成可编辑、可下载的 **SRT / ASS** 文件；也可以把字幕同步到另一份纯净视频，封装成带字幕轨道的 MKV，或切掉带字幕视频前后的广告。识别、同步、内封和切割都在本机完成，视频不会上传到云端。
 
@@ -33,6 +33,7 @@
 - 字幕同步 tab 支持音频自动对齐、整体偏移、多个起止偏移点（起点联动后续字幕）和 ±1/5/10 秒跳转，方向键 ←/→ 每次 5 秒
 - 浏览器无法播放的 MP4 编码可点「兼容预览」，由本机 ffmpeg 生成 H.264/AAC 预览
 - 新增「字幕内封」tab：纯净视频 + SRT/ASS 封装为 MKV，视频/音频不重编码，字幕可设语言、标题和默认轨道
+- 内封页选择字幕后，播放预览会直接叠加显示 SRT/ASS 内容
 - 字幕内封显示真实上传/封装进度
 - 新增「视频切割」tab：切掉前后广告，保留内封字幕；可快速流复制或精确重编码
 - 结果表中的开始/结束时间显示到毫秒，与导出的 SRT 精度一致
@@ -141,7 +142,7 @@ http://127.0.0.1:8765
 切到顶部的 **「字幕内封」** tab：
 
 1. 选择纯净视频；
-2. 选择 SRT / ASS / SSA 字幕；
+2. 选择 SRT / ASS / SSA 字幕；播放画面会实时叠加所选字幕，方便确认内容；
 3. 设置字幕语言、轨道标题，以及是否设为默认字幕；
 4. 点「开始封装」，界面会显示上传进度和 ffmpeg 封装进度；
 5. 完成后下载 MKV。

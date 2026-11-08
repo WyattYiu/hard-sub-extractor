@@ -2067,3 +2067,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .cut-rangebar input { flex: 1; width: auto; }
   .cut-rangebar button:last-child { margin-left: 0; }
 }
+
+/* SRT/ASS preview over mux video */
+.mux-overlay {
+  position: absolute;
+  left: 6%; right: 6%;
+  bottom: 9%;
+  text-align: center;
+  color: #fff;
+  font-size: clamp(16px, 2.15vw, 30px);
+  line-height: 1.42;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 8px rgba(0,0,0,.75);
+  white-space: pre-line;
+  pointer-events: none;
+  z-index: 2;
+}

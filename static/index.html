@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light">
   <title>字幕匠 · 硬字幕提取 / 同步 / 内封 / 切割</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317191f'/%3E%3Cpath d='M8 11V8h3M21 8h3v3M24 21v3h-3M11 24H8v-3M11 15h10M11 19h7' fill='none' stroke='%23f4f0e8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/styles.css?v=1.6.2">
+<link rel="stylesheet" href="/static/styles.css?v=1.6.4">
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -120,6 +120,7 @@
             <div class="mux-player-card">
               <div class="mux-stage">
                 <video id="muxVideo" controls playsinline preload="metadata"></video>
+                <div class="mux-overlay" id="muxOverlay"></div>
                 <div class="mux-empty" id="muxEmpty">
                   <div class="sync-empty-icon">
                     <svg viewBox="0 0 32 32" fill="none"><rect x="3" y="6" width="26" height="20" rx="4" stroke="currentColor" stroke-width="1.6"/><path d="M3 21l7-6 5 4 4-4 10 8" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="21" cy="12" r="2.4" stroke="currentColor" stroke-width="1.6"/></svg>
@@ -786,6 +787,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=1.6.2"></script>
+  <script src="/static/app.js?v=1.6.4"></script>
 </body>
 </html>

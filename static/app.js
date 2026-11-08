@@ -34,6 +34,7 @@
     cutDownload: $("#cutDownload"),
     muxView: $("#muxView"),
     muxVideo: $("#muxVideo"),
+    muxOverlay: $("#muxOverlay"),
     muxEmpty: $("#muxEmpty"),
     muxVideoInput: $("#muxVideoInput"),
     muxSubInput: $("#muxSubInput"),
@@ -210,6 +211,7 @@
   const muxState = {
     videoFile: null,
     subtitleFile: null,
+    cues: [],
     objectUrl: null,
     outputUrl: null,
     pollTimer: null,
@@ -3481,6 +3483,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     loadSyncSources();
   }
 
+  function updateMuxOverlay() {
+    if (!muxState.cues.length || !el.muxVideo.src) {
+      el.muxOverlay.textContent = "";
+      return;
+    }
+    const time = Number(el.muxVideo.currentTime) || 0;
+    const active = muxState.cues.filter((cue) => cue.start <= time + 0.001 && cue.end >= time - 0.001);
+    el.muxOverlay.textContent = active.map((cue) => cue.text).join("\n");
+  }
+
   function updateMuxSummary() {
     const rows = el.muxTrackSummary.querySelectorAll("div");
     const values = [
@@ -3857,17 +3869,29 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       resetMuxOutput();
       toast("纯净视频已载入", "success");
     });
-    el.muxSubInput.addEventListener("change", () => {
+    el.muxSubInput.addEventListener("change", async () => {
       const file = el.muxSubInput.files && el.muxSubInput.files[0];
       if (!file) return;
       muxState.subtitleFile = file;
+      muxState.cues = [];
       el.muxSubName.textContent = file.name;
       el.muxSubInput.value = "";
+      try {
+        const text = await readSubtitleFile(file);
+        muxState.cues = parseSubtitleText(text, file.name);
+        updateMuxOverlay();
+        toast(`字幕已载入${muxState.cues.length ? `，共 ${muxState.cues.length} 条` : ""}`, "success");
+      } catch (error) {
+        el.muxOverlay.textContent = "";
+        toast("字幕已载入，但无法在预览中解析；封装仍可继续", "error");
+      }
       updateMuxSummary();
       resetMuxOutput();
-      toast("字幕已载入", "success");
     });
     el.muxStartBtn.addEventListener("click", muxVideo);
+    el.muxVideo.addEventListener("timeupdate", updateMuxOverlay);
+    el.muxVideo.addEventListener("seeked", updateMuxOverlay);
+    el.muxVideo.addEventListener("loadedmetadata", updateMuxOverlay);
     el.tabMux.addEventListener("click", () => switchAppTab("mux"));
     updateMuxSummary();
     resetMuxOutput();
