@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>字幕匠 · 硬字幕提取 / 同步 / 内封</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317191f'/%3E%3Cpath d='M8 11V8h3M21 8h3v3M24 21v3h-3M11 24H8v-3M11 15h10M11 19h7' fill='none' stroke='%23f4f0e8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/styles.css?v=1.5.1">
+</head>
+<body>
+  <div class="page-glow" aria-hidden="true"></div>
+  <div class="wrap">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="字幕匠首页">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 28 28" fill="none"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M19 4h3.5A1.5 1.5 0 0 1 24 5.5V9M24 19v3.5a1.5 1.5 0 0 1-1.5 1.5H19M9 24H5.5A1.5 1.5 0 0 1 4 22.5V19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9.5 13.5h9M9.5 17.5h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </span>
+        <span class="brand-copy"><b>字幕匠</b><small>HARDSUB STUDIO</small></span>
+      </a>
+      <div class="top-actions">
+        <span class="local-pill"><i></i> 本机处理 · Apple Vision</span>
+        <button class="text-btn" id="helpBtn" type="button">使用说明</button>
+      </div>
+    </header>
+
+    <nav class="app-tabs" aria-label="功能切换">
+      <button class="app-tab is-active" id="tabExtract" type="button">硬字幕提取</button>
+      <button class="app-tab" id="tabSync" type="button">字幕同步</button>
+      <button class="app-tab" id="tabMux" type="button">字幕内封</button>
+    </nav>
+
+    <main>
+      <section class="mux-view" id="muxView" hidden>
+        <div class="mux-head">
+          <p class="eyebrow">MKV MUX</p>
+          <h1>把字幕，<em>封进视频里。</em></h1>
+          <p class="lede">选择纯净视频和 SRT / ASS 字幕，把字幕作为独立轨道写入 MKV。视频和音频直接复制，不重新编码。</p>
+        </div>
+        <div class="mux-layout">
+          <div class="mux-main">
+            <div class="mux-player-card">
+              <div class="mux-stage">
+                <video id="muxVideo" controls playsinline preload="metadata"></video>
+                <div class="mux-empty" id="muxEmpty">
+                  <div class="sync-empty-icon">
+                    <svg viewBox="0 0 32 32" fill="none"><rect x="3" y="6" width="26" height="20" rx="4" stroke="currentColor" stroke-width="1.6"/><path d="M3 21l7-6 5 4 4-4 10 8" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="21" cy="12" r="2.4" stroke="currentColor" stroke-width="1.6"/></svg>
+                  </div>
+                  <b>选择纯净视频</b>
+                  <span>预览编码不支持也不影响封装</span>
+                </div>
+              </div>
+              <div class="sync-filebar">
+                <label class="sync-file-btn">
+                  <svg viewBox="0 0 18 18" fill="none"><path d="M3 5.5h4l1.2 1.5H15v8H3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 10h6M9 7.5v5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                  选择视频
+                  <input type="file" id="muxVideoInput" accept="video/*,.mkv,.ts,.flv,.wmv" hidden>
+                </label>
+                <span class="sync-file-name" id="muxVideoName">未选择视频</span>
+                <span class="sync-file-sep"></span>
+                <label class="sync-file-btn">
+                  <svg viewBox="0 0 18 18" fill="none"><path d="M4 3.5h7l3 3V15H4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M11 3.5V7h3M6 10h6M6 12.5h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                  选择字幕
+                  <input type="file" id="muxSubInput" accept=".srt,.ass,.ssa,text/plain" hidden>
+                </label>
+                <span class="sync-file-name" id="muxSubName">未选择字幕</span>
+              </div>
+            </div>
+            <div class="mux-card mux-source-card">
+              <h3>封装内容</h3>
+              <div class="mux-track-summary" id="muxTrackSummary">
+                <div><span>视频</span><b>未选择</b></div>
+                <div><span>音频</span><b>原样保留</b></div>
+                <div><span>字幕</span><b>未选择</b></div>
+              </div>
+              <p class="sync-note">MKV 会保留原视频和音频流，把字幕作为可开关的独立轨道写入。视频编码不会被重新压缩，速度很快。</p>
+            </div>
+          </div>
+          <aside class="mux-side">
+            <div class="mux-card">
+              <p class="card-kicker">SUBTITLE TRACK</p>
+              <h3>字幕轨道</h3>
+              <label class="mux-field">
+                <span>语言</span>
+                <select id="muxLanguage">
+                  <option value="chi">中文</option>
+                  <option value="eng">English</option>
+                  <option value="jpn">日本語</option>
+                  <option value="kor">한국어</option>
+                  <option value="und">未指定</option>
+                </select>
+              </label>
+              <label class="mux-field">
+                <span>轨道标题</span>
+                <input type="text" id="muxTitle" placeholder="例如 简体中文" maxlength="100">
+              </label>
+              <label class="mux-check">
+                <input type="checkbox" id="muxDefault" checked>
+                设为默认字幕轨道
+              </label>
+            </div>
+            <div class="mux-card">
+              <p class="card-kicker">OUTPUT</p>
+              <h3>输出 MKV</h3>
+              <div class="mux-output-row"><span>容器</span><b>Matroska (.mkv)</b></div>
+              <div class="mux-output-row"><span>视频 / 音频</span><b>直接复制，不重编码</b></div>
+              <button class="sync-auto-btn" id="muxStartBtn" type="button">开始封装</button>
+              <div class="mux-progress" id="muxProgress" hidden>
+                <div class="mux-progress-head"><span id="muxProgressLabel">准备封装…</span><b id="muxProgressPct">0%</b></div>
+                <div class="mux-progress-track"><i id="muxProgressBar"></i></div>
+              </div>
+              <p class="sync-note" id="muxStatus">选择视频和字幕后即可封装。</p>
+              <a class="download-btn primary mux-download" id="muxDownload" hidden download>下载 MKV</a>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="sync-view" id="syncView" hidden>
+        <div class="sync-head">
+          <p class="eyebrow">SUBTITLE TIMELINE SYNC</p>
+          <h1>让字幕，<em>跟上纯净视频。</em></h1>
+          <p class="lede">载入纯净视频和 SRT / ASS 字幕，自动分析音轨，或用手动偏移/偏移点对齐，实时预览后导出新的时间轴。自动分析时文件只交给本机服务临时处理。</p>
+        </div>
+
+        <div class="sync-layout">
+          <div class="sync-main">
+            <div class="sync-player-card">
+              <div class="sync-stage" id="syncStage">
+                <video id="syncVideo" controls playsinline preload="metadata"></video>
+                <div class="sync-overlay" id="syncOverlay"></div>
+                <div class="sync-empty" id="syncEmpty">
+                  <div class="sync-empty-icon">
+                    <svg viewBox="0 0 32 32" fill="none"><rect x="3" y="6" width="26" height="20" rx="4" stroke="currentColor" stroke-width="1.6"/><path d="M3 21l7-6 5 4 4-4 10 8" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="21" cy="12" r="2.4" stroke="currentColor" stroke-width="1.6"/></svg>
+                  </div>
+                  <b>选择纯净视频</b>
+                  <span>自动对齐时只由本机服务临时分析音频</span>
+                </div>
+              </div>
+              <div class="sync-skipbar">
+                <span>跳转 · ←/→ 5s</span>
+                <button type="button" data-sync-skip="-10">−10s</button>
+                <button type="button" data-sync-skip="-5">−5s</button>
+                <button type="button" data-sync-skip="-1">−1s</button>
+                <button type="button" data-sync-skip="1">+1s</button>
+                <button type="button" data-sync-skip="5">+5s</button>
+                <button type="button" data-sync-skip="10">+10s</button>
+              </div>
+              <div class="sync-filebar">
+                <label class="sync-file-btn">
+                  <svg viewBox="0 0 18 18" fill="none"><path d="M3 5.5h4l1.2 1.5H15v8H3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 10h6M9 7.5v5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                  选择视频
+                  <input type="file" id="syncVideoInput" accept="video/*,.mkv,.ts,.flv,.wmv" hidden>
+                </label>
+                <span class="sync-file-name" id="syncVideoName">未选择视频</span>
+                <span class="sync-file-sep"></span>
+                <label class="sync-file-btn">
+                  <svg viewBox="0 0 18 18" fill="none"><path d="M4 3.5h7l3 3V15H4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M11 3.5V7h3M6 10h6M6 12.5h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                  载入字幕
+                  <input type="file" id="syncSubInput" accept=".srt,.ass,.ssa,text/plain" hidden>
+                </label>
+                <span class="sync-file-name" id="syncSubName">未选择字幕</span>
+                <button class="sync-compat-btn" id="syncCompatBtn" type="button" title="浏览器无法播放这个视频时，生成本机兼容预览">兼容预览</button>
+              </div>
+            </div>
+
+            <div class="sync-list-card">
+              <div class="sync-card-head">
+                <h3>字幕预览</h3>
+                <span id="syncCueCount" class="sync-count">0 条</span>
+              </div>
+              <div class="sync-cue-list" id="syncCueList">
+                <div class="sync-list-empty">载入字幕文件后，这里会显示原始时间与调整后的时间。</div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="sync-side">
+            <div class="sync-card sync-auto-card">
+              <p class="card-kicker">AUTO ALIGN</p>
+              <h3>音频自动同步</h3>
+              <label class="sync-source-label">
+                <span>原硬字幕视频</span>
+                <select id="syncSourceJob" aria-label="选择原硬字幕任务"></select>
+              </label>
+              <button class="sync-auto-btn" id="syncAutoBtn" type="button">分析音频并对齐</button>
+              <p class="sync-note" id="syncAutoStatus">选择原视频和纯净视频后，会根据两条音轨自动估算时间关系。</p>
+              <div class="sync-auto-result" id="syncAutoResult" hidden>
+                <div class="sync-auto-metrics" id="syncAutoMetrics"></div>
+                <div class="sync-auto-actions">
+                  <button class="sync-mini-btn primary" id="syncApplyAuto" type="button">应用自动结果</button>
+                  <button class="sync-mini-btn" id="syncClearAuto" type="button" hidden>清除自动同步</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="sync-card">
+              <p class="card-kicker">OFFSET</p>
+              <h3>整体偏移</h3>
+              <div class="sync-offset-control">
+                <button type="button" data-sync-nudge="-1">−1s</button>
+                <button type="button" data-sync-nudge="-0.1">−0.1</button>
+                <input id="syncOffset" type="number" step="0.05" value="0" aria-label="整体偏移秒数">
+                <span>秒</span>
+                <button type="button" data-sync-nudge="0.1">+0.1</button>
+                <button type="button" data-sync-nudge="1">+1s</button>
+              </div>
+              <p class="sync-note" id="syncOffsetNote">正数让字幕延后，负数让字幕提前。偏移点会在整体偏移之上叠加。</p>
+              <div class="sync-summary" id="syncSummary">等待载入字幕</div>
+            </div>
+
+            <div class="sync-card">
+              <div class="sync-card-head">
+                <h3>偏移点</h3>
+                <div class="sync-anchor-head-actions">
+                  <button class="sync-mini-btn" id="syncClearAnchors" type="button" hidden>清空</button>
+                  <button class="sync-mini-btn primary" id="syncAddAnchor" type="button">+ 起点</button>
+                  <button class="sync-mini-btn" id="syncAddEnd" type="button">+ 终点</button>
+                </div>
+              </div>
+              <p class="sync-note">先点选一条字幕，把视频拖到目标位置：点「起点」会让这条字幕及之后一起移动；点「终点」只调整这条字幕的结束时间。每个偏移点也可以直接输入起点/终点偏移秒数。</p>
+              <div class="sync-anchor-list" id="syncAnchorList">
+                <div class="sync-list-empty">还没有偏移点。只有整体偏移时不需要添加。</div>
+              </div>
+            </div>
+
+            <div class="sync-card">
+              <p class="card-kicker">EXPORT</p>
+              <h3>导出调整后的字幕</h3>
+              <div class="sync-export-buttons">
+                <button class="download-btn primary" id="syncExportSrt" type="button">下载 SRT</button>
+                <button class="download-btn" id="syncExportAss" type="button">下载 ASS</button>
+              </div>
+              <p class="sync-note">导出只修改时间轴，不改变字幕文字。多行字幕和中文标点会保留。</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="landing" id="landing">
+        <div class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">HARD-CODED SUBTITLE EXTRACTOR</p>
+            <h1>把画面里的字幕，<br><em>变成可编辑的文字。</em></h1>
+            <p class="lede">上传影片，框出字幕出现的位置。自动识别简体、繁体与双语多行字幕，并生成可直接使用的 SRT / ASS 文件。</p>
+            <div class="feature-row">
+              <span><b>简 / 繁</b> 自动识别</span>
+              <span><b>多行</b> 双语保留</span>
+              <span><b>SRT + ASS</b> 一键导出</span>
+            </div>
+            <div class="privacy-line">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12v9H6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 14v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              视频与识别结果只留在你的 Mac 上，不会上传到云端。
+            </div>
+          </div>
+
+          <div class="upload-card">
+            <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="选择视频文件">
+              <div class="drop-icon">
+                <svg viewBox="0 0 32 32" fill="none"><rect x="3" y="6" width="26" height="20" rx="4" stroke="currentColor" stroke-width="1.6"/><path d="M3 21l7-6 5 4 4-4 10 8" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="21" cy="12" r="2.4" stroke="currentColor" stroke-width="1.6"/></svg>
+              </div>
+              <h3>拖入视频，开始提取</h3>
+              <p>或点击选择文件</p>
+              <span class="file-types">MP4 · MKV · MOV · WEBM · 最大 32 GB</span>
+              <input type="file" id="fileInput" accept="video/*,.mkv,.ts,.flv,.wmv" hidden>
+            </div>
+            <div class="upload-progress" id="uploadProgress" hidden>
+              <div class="upload-progress-head"><span id="uploadLabel">正在上传视频…</span><b id="uploadPct">0%</b></div>
+              <div class="upload-track"><i id="uploadBar"></i></div>
+              <p>文件只在本机传输，请保持页面打开。</p>
+            </div>
+            <div class="upload-foot">
+              <span>Apple M 系列芯片优化</span>
+              <span>无需联网</span>
+            </div>
+          </div>
+        </div>
+
+        <section class="recent-section" id="recentSection" hidden>
+          <div class="section-head">
+            <h2>最近的影片</h2>
+            <span>结果保存在本机</span>
+          </div>
+          <div class="recent-grid" id="recentGrid"></div>
+        </section>
+
+        <section class="how-section">
+          <div class="how-item"><span>01</span><h3>上传影片</h3><p>选择需要提取硬字幕的视频文件。</p></div>
+          <div class="how-line"></div>
+          <div class="how-item"><span>02</span><h3>框选字幕</h3><p>拖动画面中的框，只覆盖字幕出现的位置。</p></div>
+          <div class="how-line"></div>
+          <div class="how-item"><span>03</span><h3>校对导出</h3><p>在表格中修改文字和时间，导出 SRT 或 ASS。</p></div>
+        </section>
+      </section>
+
+      <section class="workspace" id="workspace" hidden>
+        <div class="workspace-top">
+          <button class="back-btn" id="backBtn" type="button">
+            <svg viewBox="0 0 20 20" fill="none"><path d="M12.5 5L7.5 10l5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            返回
+          </button>
+          <div class="job-heading">
+            <h2 id="jobName">未命名影片</h2>
+            <div class="job-meta" id="jobMeta"></div>
+          </div>
+          <button class="delete-btn" id="deleteBtn" type="button">删除任务</button>
+        </div>
+
+        <div class="studio-grid">
+          <div class="main-col">
+            <div class="video-card">
+              <div class="video-stage" id="videoStage">
+                <video id="video" playsinline preload="none"></video>
+                <div class="roi" id="roi" aria-label="字幕区域">
+                  <span class="roi-tag">字幕区域</span>
+                  <i class="handle n" data-dir="n"></i>
+                  <i class="handle s" data-dir="s"></i>
+                  <i class="handle e" data-dir="e"></i>
+                  <i class="handle w" data-dir="w"></i>
+                  <i class="handle ne" data-dir="ne"></i>
+                  <i class="handle nw" data-dir="nw"></i>
+                  <i class="handle se" data-dir="se"></i>
+                  <i class="handle sw" data-dir="sw"></i>
+                </div>
+                <div class="caption-overlay" id="captionOverlay" hidden></div>
+                <div class="stage-empty" id="stageEmpty">
+                  <span class="spinner small"></span> 正在载入影片…
+                </div>
+              </div>
+              <div class="video-controls">
+                <div class="playback-cluster">
+                  <button class="skip-btn" type="button" data-skip="-10" title="后退 10 秒" aria-label="后退 10 秒">−10</button>
+                  <button class="skip-btn" type="button" data-skip="-5" title="后退 5 秒" aria-label="后退 5 秒">−5</button>
+                  <button class="skip-btn" type="button" data-skip="-1" title="后退 1 秒" aria-label="后退 1 秒">−1</button>
+                  <button class="play-btn" id="playBtn" type="button" aria-label="播放">
+                    <svg class="icon-play" viewBox="0 0 20 20" fill="none"><path d="M7 4.8v10.4l8-5.2z" fill="currentColor"/></svg>
+                    <svg class="icon-pause" viewBox="0 0 20 20" fill="none"><path d="M6 4.5h3v11H6zM11 4.5h3v11h-3z" fill="currentColor"/></svg>
+                  </button>
+                  <button class="skip-btn" type="button" data-skip="1" title="前进 1 秒" aria-label="前进 1 秒">+1</button>
+                  <button class="skip-btn" type="button" data-skip="5" title="前进 5 秒" aria-label="前进 5 秒">+5</button>
+                  <button class="skip-btn" type="button" data-skip="10" title="前进 10 秒" aria-label="前进 10 秒">+10</button>
+                </div>
+                <div class="timeline-wrap">
+                  <input type="range" id="timeline" min="0" max="100" value="0" step="0.01" aria-label="播放进度">
+                </div>
+                <span class="time-label" id="timeLabel">00:00 / 00:00</span>
+              </div>
+              <div class="video-toolbar">
+                <div class="preset-group">
+                  <span class="toolbar-label">字幕定位</span>
+                  <button class="mini-btn is-active" type="button" data-preset="bottom40">底部 45%</button>
+                  <button class="mini-btn" type="button" data-preset="bottom30">底部 30%</button>
+                  <button class="mini-btn" type="button" data-preset="full">全画面</button>
+                  <button class="mini-btn auto-btn" type="button" id="autoRegion">
+                    <svg viewBox="0 0 18 18" fill="none"><path d="M9 2v3M9 13v3M2 9h3M13 9h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="9" cy="9" r="3.2" stroke="currentColor" stroke-width="1.5"/></svg>
+                    自动识别
+                  </button>
+                </div>
+                <div class="toolbar-right">
+                  <div class="volume-control">
+                    <button class="volume-btn" id="volumeBtn" type="button" aria-label="静音" title="静音 / 取消静音">
+                      <svg class="icon-volume" viewBox="0 0 20 20" fill="none"><path d="M4 7.5h3l4-3v11l-4-3H4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M13.5 7.2a4 4 0 0 1 0 5.6M15.4 5.3a6.6 6.6 0 0 1 0 9.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                      <svg class="icon-muted" viewBox="0 0 20 20" fill="none"><path d="M4 7.5h3l4-3v11l-4-3H4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M13.5 8l4 4M17.5 8l-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                    </button>
+                    <input class="volume-slider" id="volumeSlider" type="range" min="0" max="1" step="0.01" value="1" aria-label="音量">
+                    <span class="volume-value" id="volumeValue">100%</span>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="overlayToggle" aria-label="叠加预览识别字幕">
+                    <span class="switch-track"><i></i></span>
+                    叠加预览
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="live-card">
+              <div class="live-head"><span>同步对照</span><span id="liveTime">等待播放</span></div>
+              <div class="live-text" id="liveCaption">播放视频，这里会显示当前时间轴上的识别结果。</div>
+            </div>
+
+          </div>
+
+          <aside class="side-col">
+            <div class="results-card" id="resultsCard" hidden>
+              <div class="results-head">
+                <div>
+                  <p class="eyebrow">OUTPUT</p>
+                  <h3>识别结果 <span id="resultCount"></span></h3>
+                </div>
+                <div class="download-actions">
+                  <button class="save-btn" id="saveBtn" type="button">保存修改</button>
+                  <a class="download-btn" id="downloadSrt" href="#" download>下载 SRT</a>
+                  <a class="download-btn primary" id="downloadAss" href="#" download>下载 ASS</a>
+                </div>
+              </div>
+              <div class="result-stats" id="resultStats"></div>
+              <div class="edit-toolbar">
+                <label class="mobile-select-all">
+                  <input type="checkbox" id="selectAllInline" aria-label="全选当前页">
+                  全选
+                </label>
+                <span class="edit-hint">⌘/Ctrl 点击多选 · Shift 连选</span>
+                <span class="selected-count" id="selectedCount">已选 0 条</span>
+                <div class="edit-actions">
+                  <button class="edit-btn" id="mergeBtn" type="button" disabled>合并所选</button>
+                  <button class="edit-btn danger" id="deleteSelectedBtn" type="button" disabled>删除所选</button>
+                  <button class="edit-btn" id="cleanLangBtn" type="button" title="按当前选择的语种清理现有字幕">清理语种</button>
+                  <button class="edit-btn" id="dedupeBtn" type="button" title="合并相邻的重复尾行字幕">清理重复</button>
+                  <button class="edit-btn" id="undoBtn" type="button" disabled title="撤销 (⌘Z)">撤销</button>
+                  <button class="edit-btn" id="redoBtn" type="button" disabled title="重做 (⇧⌘Z)">重做</button>
+                  <span class="offset-control">
+                    <input id="offsetInput" type="number" step="0.1" value="0.5" aria-label="时间偏移秒数">
+                    <button class="edit-btn offset-btn" id="offsetBtn" type="button" title="有勾选时平移所选，否则平移全部">平移</button>
+                  </span>
+                </div>
+              </div>
+              <div class="table-tools">
+                <div class="search-box">
+                  <svg viewBox="0 0 18 18" fill="none"><circle cx="8" cy="8" r="5.2" stroke="currentColor" stroke-width="1.5"/><path d="M12 12l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                  <input id="searchInput" type="search" placeholder="搜索字幕内容…">
+                </div>
+                <label class="confidence-filter">
+                  <span>置信度</span>
+                  <select id="confidenceFilter" aria-label="按置信度筛选字幕">
+                    <option value="all">全部</option>
+                    <option value="max:0.3">低：≤ 30%</option>
+                    <option value="max:0.5">低：≤ 50%</option>
+                    <option value="max:0.7">低：≤ 70%</option>
+                    <option value="min:0.5">高：≥ 50%</option>
+                    <option value="min:0.7">高：≥ 70%</option>
+                    <option value="min:0.9">高：≥ 90%</option>
+                  </select>
+                </label>
+                <span class="table-count" id="tableCount"></span>
+                <span class="save-state" id="saveState"></span>
+              </div>
+              <div class="table-wrap">
+                <table class="cue-table">
+                  <thead>
+                    <tr>
+                      <th class="col-check"><input type="checkbox" id="selectAllRows" aria-label="全选筛选结果"></th>
+                      <th class="col-id">#</th>
+                      <th class="col-time">开始</th>
+                      <th class="col-time">结束</th>
+                      <th class="col-text">字幕文本</th>
+                      <th class="col-conf">置信度</th>
+                      <th class="col-actions"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="cueBody"></tbody>
+                </table>
+              </div>
+              <div class="table-footer">
+                <span class="table-footer-count" id="visibleCount">显示 0 条</span>
+                <span class="pager-hint">点击行跳转视频 · ⌘/Ctrl 多选 · Shift 连选</span>
+              </div>
+            </div>
+
+            <div class="progress-card" id="progressCard" hidden>
+              <div class="progress-head">
+                <div><p class="eyebrow">PROCESS</p><h3 id="progressTitle">正在识别</h3></div>
+                <span class="progress-pct" id="progressPct">0%</span>
+              </div>
+              <div class="progress-track"><i id="progressBar"></i></div>
+              <p class="progress-message" id="progressMessage">准备中…</p>
+              <div class="stage-list" id="stageList">
+                <div class="stage-item" data-stage="starting"><i></i><span>准备引擎</span></div>
+                <div class="stage-item" data-stage="ocr"><i></i><span>扫描并识别</span></div>
+                <div class="stage-item" data-stage="build"><i></i><span>整理时间轴</span></div>
+                <div class="stage-item" data-stage="done"><i></i><span>完成</span></div>
+              </div>
+              <div class="log-head"><span>运行日志</span><button id="logToggle" type="button">收起</button></div>
+              <div class="log-box" id="logBox"></div>
+              <button class="cancel-btn" id="cancelBtn" type="button">取消任务</button>
+            </div>
+
+
+            <div class="panel settings-panel" id="settingsPanel">
+              <div class="panel-head">
+                <div><p class="eyebrow">SETTINGS</p><h3>识别设置</h3></div>
+                <span class="step-badge">01</span>
+              </div>
+
+              <div class="field roi-display">
+                <div class="field-label"><label>字幕区域</label><span id="roiSummary">底部 45%</span></div>
+                <div class="roi-display-row">
+                  <div class="roi-mini" id="roiMini">
+                    <img id="roiMiniPoster" alt="">
+                    <div class="roi-mini-box" id="roiMiniBox"></div>
+                  </div>
+                  <div class="roi-display-info">
+                    <div class="roi-meta" id="roiMeta"></div>
+                    <button class="roi-locate" id="roiLocate" type="button">在画面中查看</button>
+                  </div>
+                </div>
+                <div class="roi-inputs">
+                  <label><span>X</span><input id="roiX" type="number" min="0" max="100" step="0.1" aria-label="区域左边距百分比"><em>%</em></label>
+                  <label><span>Y</span><input id="roiY" type="number" min="0" max="100" step="0.1" aria-label="区域上边距百分比"><em>%</em></label>
+                  <label><span>宽</span><input id="roiW" type="number" min="2" max="100" step="0.1" aria-label="区域宽度百分比"><em>%</em></label>
+                  <label><span>高</span><input id="roiH" type="number" min="2" max="100" step="0.1" aria-label="区域高度百分比"><em>%</em></label>
+                  <button class="roi-apply" id="roiApply" type="button">应用</button>
+                </div>
+                <p class="roi-input-hint">按画面百分比输入；左上角为 0,0，宽高至少 2%。</p>
+                <button class="roi-history-toggle" id="roiHistoryToggle" type="button" aria-expanded="false">
+                  <span>历史区域</span>
+                  <b id="roiHistoryCount">0</b>
+                  <svg viewBox="0 0 12 8" fill="none"><path d="M1 1.5l5 5 5-5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                </button>
+                <div class="roi-history" id="roiHistoryList" hidden></div>
+              </div>
+
+              <div class="field">
+                <div class="field-label"><label>字幕语种</label><span>最多两种 · 未选语种会被过滤</span></div>
+                <div class="language-chips" id="languageChips">
+                  <label class="lang-chip is-checked">
+                    <input type="checkbox" value="zh" checked>
+                    <span><b>中文</b><small>简体 / 繁体</small></span>
+                  </label>
+                  <label class="lang-chip">
+                    <input type="checkbox" value="en">
+                    <span><b>英文</b><small>English</small></span>
+                  </label>
+                  <label class="lang-chip">
+                    <input type="checkbox" value="ja">
+                    <span><b>日语</b><small>日本語</small></span>
+                  </label>
+                </div>
+                <p class="field-help" id="languageNote">只保留中文；日文假名、纯英文行会被忽略。</p>
+              </div>
+
+              <div class="field">
+                <div class="field-label"><label for="conversionSel">输出文字</label><span>可后期再改</span></div>
+                <select id="conversionSel">
+                  <option value="none">保持画面原文</option>
+                  <option value="simplified">统一转为简体</option>
+                  <option value="traditional">统一转为繁体</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <div class="field-label"><label>识别精度</label><span id="precisionHint">推荐</span></div>
+                <div class="precision-grid" id="precisionGrid">
+                  <label class="precision-option">
+                    <input type="radio" name="precision" value="fast">
+                    <b>快速</b><small>约 1.5 帧/秒</small>
+                  </label>
+                  <label class="precision-option is-checked">
+                    <input type="radio" name="precision" value="balanced" checked>
+                    <b>标准</b><small>约 2 帧/秒</small>
+                  </label>
+                  <label class="precision-option">
+                    <input type="radio" name="precision" value="fine">
+                    <b>精细</b><small>约 3 帧/秒</small>
+                  </label>
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="field-label"><label>提取范围</label><span>只处理这一段</span></div>
+                <div class="range-grid">
+                  <label class="range-box">
+                    <span>开始</span>
+                    <input id="extractionStart" type="text" value="00:00:00" inputmode="numeric" aria-label="提取开始时间">
+                  </label>
+                  <span class="range-sep">→</span>
+                  <label class="range-box">
+                    <span>结束</span>
+                    <input id="extractionEnd" type="text" value="00:00:00" inputmode="numeric" aria-label="提取结束时间">
+                  </label>
+                </div>
+                <div class="range-actions">
+                  <button class="range-btn" id="rangeReset" type="button">整段视频</button>
+                  <button class="range-btn" id="rangeStartNow" type="button">起点取当前</button>
+                  <button class="range-btn" id="rangeEndNow" type="button">终点取当前</button>
+                  <span class="range-hint" id="rangeHint">整段视频</span>
+                </div>
+              </div>
+
+              <div class="multiline-note">
+                <svg viewBox="0 0 20 20" fill="none"><path d="M4 5h12M4 10h9M4 15h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                自动保留多行字幕，双语会写入同一条。
+              </div>
+
+              <div class="scene-filter-row">
+                <div class="scene-filter-copy">
+                  <b>过滤画面原有文字</b>
+                  <small>忽略台标、招牌和异常位置</small>
+                </div>
+                <label class="switch compact-switch">
+                  <input type="checkbox" id="sceneFilter" checked aria-label="过滤画面原有文字">
+                  <span class="switch-track"><i></i></span>
+                </label>
+              </div>
+
+              <details class="advanced">
+                <summary>高级选项</summary>
+                <div class="field compact">
+                  <div class="field-label"><label for="minDuration">最短显示时长</label><span>秒</span></div>
+                  <input id="minDuration" type="number" min="0.1" max="5" step="0.1" value="0.3">
+                </div>
+                <div class="field compact">
+                  <div class="field-label"><label for="confidence">OCR 置信度</label><span id="confidenceValue">0.15</span></div>
+                  <input id="confidence" type="range" min="0.05" max="0.6" step="0.05" value="0.15">
+                </div>
+                <div class="field compact">
+                  <div class="field-label"><label for="fontName">ASS 字体</label></div>
+                  <select id="fontName">
+                    <option value="Heiti SC">黑体 SC（推荐）</option>
+                    <option value="Hiragino Sans GB">冬青黑体</option>
+                    <option value="Songti SC">宋体 SC</option>
+                    <option value="PingFang SC">苹方 SC</option>
+                    <option value="PingFang TC">苹方 TC</option>
+                  </select>
+                </div>
+              </details>
+
+              <button class="start-btn" id="startBtn" type="button">
+                <span>开始提取字幕</span>
+                <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h11M11 5l5 5-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <p class="start-hint" id="startHint">标准模式适合大多数影片。字幕越清晰，识别越准确。</p>
+            </div>
+
+            <div class="tip-card" id="tipCard">
+              <span class="tip-icon">TIP</span>
+              <p>框选时尽量只包住字幕文字，避开台标、水印和画面内的大字。开启「过滤画面原有文字」后，程序会按位置和停留时间忽略异常文字。</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>字幕匠 · HardSub Studio</span>
+      <span>为 Apple silicon 打造 · 本地 OCR</span>
+    </footer>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
+
+  <div class="modal" id="helpModal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <button class="modal-close" type="button" data-close aria-label="关闭">×</button>
+      <p class="eyebrow">README</p>
+      <h2 id="helpTitle">使用说明</h2>
+      <ol class="help-list">
+        <li><b>上传影片。</b>支持 MP4、MKV、MOV 等常见格式。文件不会离开本机。</li>
+        <li><b>框选字幕区域。</b>拖动橙色框，使其只覆盖字幕出现的位置。点「自动识别」可让程序先找一次。</li>
+        <li><b>选择范围、语种与精度。</b>可以只提取视频中的一段；用播放器下方的 −10/−5/−1、+1/+5/+10 秒按钮精确定位，再点「起点取当前 / 终点取当前」。字幕时间仍按原视频输出。</li>
+        <li><b>字幕同步（新）。</b>顶部切到「字幕同步」，载入纯净视频和 SRT/ASS 字幕；可先选择原硬字幕视频做音频自动对齐，再用整体偏移或偏移点微调（起点会带动后续字幕，终点只改该条结束时间）；支持 ±1/5/10 秒按钮和 ←/→ 每次 5 秒跳转。浏览器无法播放的编码可点「兼容预览」转成本机 H.264 预览，预览后导出。</li>
+        <li><b>字幕内封（新）。</b>顶部切到「字幕内封」，选择纯净视频和 SRT/ASS 字幕，设置语言、标题和默认轨道，封装成 MKV。界面会显示上传和封装进度；视频和音频直接复制，不重新编码。</li>
+
+        <li><b>校对并导出。</b>点击行可跳转视频；⌘/Ctrl 点击多选，Shift 连选。识别设置会显示当前字幕区域，可输入 X/Y/宽/高百分比精确定位，并保留最近使用过的历史区域，可一键恢复。删除、合并、平移、改文字和时间都可撤销/重做（⌘Z / ⇧⌘Z）；时间显示精确到毫秒；清理语种和清理重复都会先弹窗展示并逐项勾选；播放器支持音量和静音。</li>
+      </ol>
+      <div class="help-note">
+        <b>关于准确率</b>
+        <p>识别质量取决于字幕字号、背景复杂度和视频清晰度。若画面内文字混入结果，先收紧字幕框，再开启「过滤画面原有文字」。字幕中的空格会保留；多行字幕会自动合并；低分辨率素材会自动放大后再做 OCR。ASS 默认使用黑体，并自动按画面高度设置字号。</p>
+      </div>
+      <button class="download-btn primary modal-ok" type="button" data-close>知道了</button>
+    </div>
+  </div>
+
+  <div class="modal" id="cleanupModal" hidden>
+    <div class="modal-backdrop" data-cleanup-close></div>
+    <div class="modal-card cleanup-card" role="dialog" aria-modal="true" aria-labelledby="cleanupTitle">
+      <button class="modal-close" type="button" data-cleanup-close aria-label="关闭">×</button>
+      <p class="eyebrow" id="cleanupEyebrow">CLEANUP</p>
+      <h2 id="cleanupTitle">确认清理</h2>
+      <p class="cleanup-intro" id="cleanupIntro"></p>
+      <div class="cleanup-summary" id="cleanupSummary"></div>
+      <div class="cleanup-toolbar">
+        <label class="cleanup-select-all">
+          <input type="checkbox" id="cleanupSelectAll" checked>
+          全选
+        </label>
+        <span id="cleanupSelectedCount">已选 0 项</span>
+      </div>
+      <div class="cleanup-list" id="cleanupList"></div>
+      <div class="cleanup-actions">
+        <button class="merge-cancel" id="cleanupCancel" type="button">取消</button>
+        <button class="merge-confirm" id="cleanupConfirm" type="button">应用选中项</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="mergeModal" hidden>
+    <div class="modal-backdrop" data-merge-close></div>
+    <div class="modal-card merge-modal-card" role="dialog" aria-modal="true" aria-labelledby="mergeTitle">
+      <button class="modal-close" type="button" data-merge-close aria-label="关闭">×</button>
+      <p class="eyebrow">MERGE</p>
+      <h2 id="mergeTitle">确认合并字幕</h2>
+      <p class="merge-intro" id="mergeIntro"></p>
+      <div class="merge-cue-list" id="mergeCueList"></div>
+      <div class="merge-result">
+        <div class="merge-result-head">
+          <span>合并后的字幕（可自定义输入）</span>
+          <button class="merge-reset" id="mergeReset" type="button">恢复自动合并</button>
+        </div>
+        <textarea class="merge-textarea" id="mergeFinalText" rows="3" spellcheck="false" aria-label="合并后的字幕文字"></textarea>
+        <small id="mergeRange"></small>
+      </div>
+      <div class="merge-actions">
+        <button class="merge-cancel" id="mergeCancel" type="button">取消</button>
+        <button class="merge-confirm" id="mergeConfirm" type="button">确认合并</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=1.5.1"></script>
+</body>
+</html>
