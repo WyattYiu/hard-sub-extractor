@@ -33,6 +33,10 @@ MUX_DIR = manager.jobs_dir.parent / "mux"
 MUX_DIR.mkdir(parents=True, exist_ok=True)
 MUX_JOBS: dict[str, dict] = {}
 MUX_LOCK = threading.Lock()
+CUT_DIR = manager.jobs_dir.parent / "cut"
+CUT_DIR.mkdir(parents=True, exist_ok=True)
+CUT_JOBS: dict[str, dict] = {}
+CUT_LOCK = threading.Lock()
 
 
 def _error(message: str, status: int = 400):
@@ -72,7 +76,7 @@ def health():
         "ffmpeg": ffmpeg,
         "ffprobe": ffprobe,
         "vision": OCR_BINARY.exists(),
-        "version": "1.5.1",
+        "version": "1.6.0",
     })
 
 
@@ -342,6 +346,204 @@ def mux_status(token: str):
         "error": job["error"],
         "result": job["result"],
     })
+
+
+def _first_subtitle_codec(path: Path) -> str:
+    _, ffprobe = ensure_media_tools()
+    process = subprocess.run(
+        [ffprobe, "-v", "error", "-select_streams", "s:0",
+         "-show_entries", "stream=codec_name", "-of", "default=nw=1:nk=1", str(path)],
+        capture_output=True, text=True, timeout=30,
+    )
+    return process.stdout.strip().lower()
+
+
+def _run_cut_job(token: str) -> None:
+    job = CUT_JOBS.get(token)
+    if not job:
+        return
+    try:
+        job["stage"] = "cutting"
+        job["progress"] = 0.0
+        job["message"] = "正在切割…"
+        ffmpeg, _ = ensure_media_tools()
+        command = [
+            ffmpeg, "-y", "-v", "error", "-progress", "pipe:1", "-nostats",
+            "-ss", f"{job['start']:.3f}", "-i", str(job["input_path"]),
+            "-t", f"{job['end'] - job['start']:.3f}",
+            "-map", "0:v?", "-map", "0:a?", "-map", "0:s?", "-map", "0:t?",
+            "-map_chapters", "-1",
+        ]
+        if job["mode"] == "precise":
+            subtitle_codec = _first_subtitle_codec(job["input_path"])
+            if subtitle_codec in ("hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle"):
+                raise ValueError("精确模式暂不支持图形字幕（PGS/DVD），请改用快速模式")
+            text_codec = "ass" if subtitle_codec in ("ass", "ssa") else "srt"
+            command += [
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+            ]
+            if subtitle_codec:
+                command += ["-c:s", text_codec]
+            command += ["-c:t", "copy"]
+        else:
+            command += ["-c", "copy", "-avoid_negative_ts", "make_zero"]
+        command += ["-f", "matroska", str(job["output_path"])]
+        process = subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1,
+        )
+        duration = max(0.01, job["end"] - job["start"])
+        if process.stdout is not None:
+            for line in process.stdout:
+                line = line.strip()
+                if line.startswith("out_time_us="):
+                    try:
+                        seconds = float(line.split("=", 1)[1]) / 1_000_000
+                    except ValueError:
+                        seconds = 0.0
+                    if seconds > 0:
+                        job["progress"] = round(min(0.98, seconds / duration), 3)
+                elif line.startswith("out_time="):
+                    seconds = _mux_progress_seconds(line.split("=", 1)[1])
+                    if seconds > 0:
+                        job["progress"] = round(min(0.98, seconds / duration), 3)
+                elif line.startswith("progress=") and line.endswith("end"):
+                    job["progress"] = 0.99
+        code = process.wait(timeout=30)
+        if code != 0:
+            raise ValueError("ffmpeg 切割失败")
+        info = probe_video(job["output_path"])
+        result = {
+            "url": f"/api/cut/{token}/download",
+            "filename": job["output_name"],
+            "size": job["output_path"].stat().st_size,
+            "duration": info.get("duration", 0),
+            "video_codec": info.get("codec", ""),
+            "audio_codec": info.get("audio_codec", ""),
+        }
+        (job["work_dir"] / "info.json").write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+        job["result"] = result
+        job["progress"] = 1.0
+        job["stage"] = "done"
+        job["message"] = "切割完成"
+    except Exception as exc:
+        job["stage"] = "error"
+        job["error"] = str(exc)
+        job["message"] = f"切割失败：{exc}"
+    finally:
+        job["updated_at"] = time.time()
+
+
+@app.post("/api/cut")
+def cut_video():
+    video = request.files.get("video")
+    if video is None or not video.filename:
+        return _error("没有收到视频文件")
+    try:
+        start = float(request.form.get("start") or 0)
+        end = float(request.form.get("end") or 0)
+    except ValueError:
+        return _error("切割时间格式不正确")
+    mode = (request.form.get("mode") or "copy").lower()
+    if mode not in ("copy", "precise"):
+        mode = "copy"
+    token = uuid.uuid4().hex[:16]
+    work_dir = CUT_DIR / token
+    work_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(video.filename).suffix.lower() or ".mp4"
+    input_path = work_dir / f"input{suffix}"
+    output_path = work_dir / "output.mkv"
+    try:
+        video.save(str(input_path))
+        info = probe_video(input_path)
+        duration = float(info.get("duration") or 0)
+        if start < 0 or end <= start or (duration and end > duration + 0.5):
+            raise ValueError("切割范围不在视频时长内")
+        output_name = f"{Path(_safe_filename(video.filename, 'output')).stem}_cut.mkv"
+        with CUT_LOCK:
+            CUT_JOBS[token] = {
+                "token": token,
+                "work_dir": work_dir,
+                "input_path": input_path,
+                "output_path": output_path,
+                "output_name": output_name,
+                "start": start,
+                "end": min(end, duration) if duration else end,
+                "mode": mode,
+                "stage": "queued",
+                "progress": 0.0,
+                "message": "准备切割…",
+                "error": "",
+                "result": None,
+                "updated_at": time.time(),
+            }
+        thread = threading.Thread(target=_run_cut_job, args=(token,), daemon=True)
+        thread.start()
+        cutoff = time.time() - 86400
+        for stale in CUT_DIR.iterdir():
+            if stale.is_dir() and stale.name != token:
+                try:
+                    if stale.stat().st_mtime < cutoff:
+                        shutil.rmtree(stale, ignore_errors=True)
+                except OSError:
+                    pass
+        return jsonify({
+            "token": token,
+            "status_url": f"/api/cut/{token}/status",
+            "download_url": f"/api/cut/{token}/download",
+        })
+    except ValueError as exc:
+        shutil.rmtree(work_dir, ignore_errors=True)
+        return _error(f"切割失败：{exc}", 400)
+    except Exception as exc:
+        shutil.rmtree(work_dir, ignore_errors=True)
+        return _error(f"切割失败：{exc}", 500)
+
+
+@app.get("/api/cut/<token>/status")
+def cut_status(token: str):
+    if not token or any(char not in "0123456789abcdef" for char in token):
+        return _error("无效的切割任务", 404)
+    job = CUT_JOBS.get(token)
+    if job is None:
+        output = CUT_DIR / token / "output.mkv"
+        info_path = CUT_DIR / token / "info.json"
+        if output.exists() and info_path.exists():
+            try:
+                result = json.loads(info_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                result = None
+            return jsonify({"stage": "done", "progress": 1.0, "message": "切割完成", "result": result})
+        return _error("切割任务不存在或已过期", 404)
+    return jsonify({
+        "stage": job["stage"],
+        "progress": job["progress"],
+        "message": job["message"],
+        "error": job["error"],
+        "result": job["result"],
+    })
+
+
+@app.get("/api/cut/<token>/download")
+def cut_download(token: str):
+    if not token or any(char not in "0123456789abcdef" for char in token):
+        return _error("无效的下载地址", 404)
+    work_dir = CUT_DIR / token
+    output = work_dir / "output.mkv"
+    info_path = work_dir / "info.json"
+    if not output.exists() or not info_path.exists():
+        return _error("切割文件不存在或已过期", 404)
+    try:
+        info = json.loads(info_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        info = {}
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=info.get("filename") or "output_cut.mkv",
+        mimetype="video/x-matroska",
+    )
 
 
 @app.get("/api/mux/<token>/download")

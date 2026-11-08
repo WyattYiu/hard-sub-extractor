@@ -11,6 +11,27 @@
     tabExtract: $("#tabExtract"),
     tabSync: $("#tabSync"),
     tabMux: $("#tabMux"),
+    tabCut: $("#tabCut"),
+    cutView: $("#cutView"),
+    cutVideo: $("#cutVideo"),
+    cutEmpty: $("#cutEmpty"),
+    cutVideoInput: $("#cutVideoInput"),
+    cutVideoName: $("#cutVideoName"),
+    cutStart: $("#cutStart"),
+    cutEnd: $("#cutEnd"),
+    cutStartNow: $("#cutStartNow"),
+    cutEndNow: $("#cutEndNow"),
+    cutReset: $("#cutReset"),
+    cutSummary: $("#cutSummary"),
+    cutMode: $("#cutMode"),
+    cutModeNote: $("#cutModeNote"),
+    cutStartBtn: $("#cutStartBtn"),
+    cutStatus: $("#cutStatus"),
+    cutProgress: $("#cutProgress"),
+    cutProgressLabel: $("#cutProgressLabel"),
+    cutProgressPct: $("#cutProgressPct"),
+    cutProgressBar: $("#cutProgressBar"),
+    cutDownload: $("#cutDownload"),
     muxView: $("#muxView"),
     muxVideo: $("#muxVideo"),
     muxEmpty: $("#muxEmpty"),
@@ -193,6 +214,15 @@
     outputUrl: null,
     pollTimer: null,
     pollToken: null,
+  };
+
+  const cutState = {
+    videoFile: null,
+    objectUrl: null,
+    duration: 0,
+    pollTimer: null,
+    pollToken: null,
+    outputUrl: null,
   };
 
   const state = {
@@ -517,11 +547,14 @@
     closeEvents();
     el.syncView.hidden = true;
     el.muxView.hidden = true;
+    el.cutView.hidden = true;
     el.syncVideo.pause();
     el.muxVideo.pause();
+    el.cutVideo.pause();
     el.tabExtract.classList.add("is-active");
     el.tabSync.classList.remove("is-active");
     el.tabMux.classList.remove("is-active");
+    el.tabCut.classList.remove("is-active");
     try {
       const job = await api(`/api/jobs/${jobId}`);
       state.job = job;
@@ -560,9 +593,11 @@
     el.syncVideo.pause();
     el.syncView.hidden = true;
     el.muxView.hidden = true;
+    el.cutView.hidden = true;
     el.tabExtract.classList.add("is-active");
     el.tabSync.classList.remove("is-active");
     el.tabMux.classList.remove("is-active");
+    el.tabCut.classList.remove("is-active");
     el.workspace.hidden = true;
     el.landing.hidden = false;
     el.video.removeAttribute("src");
@@ -3591,6 +3626,221 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     xhr.send(form);
   }
 
+  function cutTimes() {
+    const start = parseCueTime(el.cutStart.value);
+    const end = parseCueTime(el.cutEnd.value);
+    return { start, end };
+  }
+
+  function resetCutOutput() {
+    if (cutState.pollTimer) clearTimeout(cutState.pollTimer);
+    cutState.pollTimer = null;
+    cutState.pollToken = null;
+    cutState.outputUrl = null;
+    el.cutDownload.hidden = true;
+    el.cutDownload.removeAttribute("href");
+    el.cutProgress.hidden = true;
+  }
+
+  function updateCutSummary() {
+    if (!cutState.videoFile) {
+      el.cutSummary.textContent = "选择视频后设置开始和结束时间。";
+      el.cutStartBtn.disabled = true;
+      return;
+    }
+    const { start, end } = cutTimes();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || start < 0 || (cutState.duration && end > cutState.duration + 0.05)) {
+      el.cutSummary.textContent = "请设置有效的开始和结束时间。";
+      el.cutStartBtn.disabled = true;
+      return;
+    }
+    const duration = end - start;
+    el.cutSummary.textContent = `保留 ${fmtCueTime(start)} – ${fmtCueTime(end)}\n片段时长 ${fmtCueTime(duration)} · 原视频 ${fmtCueTime(cutState.duration)}`;
+    el.cutStartBtn.disabled = false;
+  }
+
+  function setCutProgress(percent, label) {
+    const value = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+    el.cutProgress.hidden = false;
+    el.cutProgressBar.style.width = `${value}%`;
+    el.cutProgressPct.textContent = `${value}%`;
+    if (label) el.cutProgressLabel.textContent = label;
+  }
+
+  function seekCutBy(delta) {
+    if (!el.cutVideo.src) return;
+    const duration = Number(cutState.duration) || 0;
+    const target = Math.max(0, Math.min(duration || Infinity, (Number(el.cutVideo.currentTime) || 0) + Number(delta)));
+    el.cutVideo.currentTime = target;
+  }
+
+  function pollCutStatus(token) {
+    const tick = async () => {
+      if (cutState.pollToken !== token) return;
+      try {
+        const data = await api(`/api/cut/${token}/status`);
+        if (cutState.pollToken !== token) return;
+        if (data.stage === "done") {
+          const result = data.result || {};
+          setCutProgress(100, "切割完成");
+          el.cutStatus.textContent = `切割完成：${result.filename || "output_cut.mkv"} · ${(Number(result.size) / 1024 / 1024).toFixed(1)} MB`;
+          cutState.outputUrl = result.url;
+          el.cutDownload.href = result.url;
+          el.cutDownload.download = result.filename || "output_cut.mkv";
+          el.cutDownload.hidden = false;
+          el.cutStartBtn.disabled = false;
+          el.cutStartBtn.textContent = "开始切割";
+          cutState.pollTimer = null;
+          cutState.pollToken = null;
+          toast("视频切割完成", "success");
+          return;
+        }
+        if (data.stage === "error") {
+          el.cutProgress.hidden = true;
+          el.cutStatus.textContent = data.message || "切割失败";
+          el.cutStartBtn.disabled = false;
+          el.cutStartBtn.textContent = "开始切割";
+          cutState.pollTimer = null;
+          cutState.pollToken = null;
+          toast(data.message || "切割失败", "error");
+          return;
+        }
+        setCutProgress(Math.round((Number(data.progress) || 0) * 100), data.stage === "queued" ? "准备切割…" : "正在切割");
+        el.cutStatus.textContent = data.message || "正在切割…";
+        cutState.pollTimer = setTimeout(tick, 450);
+      } catch (error) {
+        el.cutProgress.hidden = true;
+        el.cutStatus.textContent = error.message || "无法读取切割进度";
+        el.cutStartBtn.disabled = false;
+        el.cutStartBtn.textContent = "开始切割";
+        cutState.pollTimer = null;
+        cutState.pollToken = null;
+        toast(error.message || "无法读取切割进度", "error");
+      }
+    };
+    tick();
+  }
+
+  function startCut() {
+    if (!cutState.videoFile) {
+      toast("请先选择视频", "error");
+      return;
+    }
+    const { start, end } = cutTimes();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      toast("请设置有效的开始和结束时间", "error");
+      return;
+    }
+    resetCutOutput();
+    const form = new FormData();
+    form.append("video", cutState.videoFile, cutState.videoFile.name);
+    form.append("start", String(start));
+    form.append("end", String(end));
+    form.append("mode", el.cutMode.value);
+    el.cutStartBtn.disabled = true;
+    el.cutStartBtn.textContent = "正在上传…";
+    el.cutDownload.hidden = true;
+    setCutProgress(0, "正在上传");
+    el.cutStatus.textContent = "正在上传视频…";
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/cut");
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      const percent = Math.round(event.loaded / event.total * 100);
+      setCutProgress(percent, "正在上传");
+      el.cutStartBtn.textContent = `正在上传 ${percent}%…`;
+      el.cutStatus.textContent = `正在上传：${percent}%`;
+    };
+    xhr.upload.onload = () => {
+      el.cutStartBtn.textContent = "正在切割…";
+      setCutProgress(0, "准备切割…");
+      el.cutStatus.textContent = "上传完成，准备切割…";
+    };
+    xhr.onerror = () => {
+      el.cutStartBtn.disabled = false;
+      el.cutStartBtn.textContent = "开始切割";
+      el.cutProgress.hidden = true;
+      el.cutStatus.textContent = "上传失败，请重试。";
+      toast("切割请求失败", "error");
+    };
+    xhr.onload = () => {
+      let data = null;
+      try { data = JSON.parse(xhr.responseText); } catch (_) { data = null; }
+      if (xhr.status < 200 || xhr.status >= 300 || !data || data.error || !data.token) {
+        el.cutStartBtn.disabled = false;
+        el.cutStartBtn.textContent = "开始切割";
+        el.cutProgress.hidden = true;
+        el.cutStatus.textContent = (data && data.error) || "切割失败，请重试。";
+        toast((data && data.error) || "切割失败", "error");
+        return;
+      }
+      cutState.pollToken = data.token;
+      el.cutStartBtn.textContent = "正在切割…";
+      setCutProgress(0, "准备切割…");
+      pollCutStatus(data.token);
+    };
+    xhr.send(form);
+  }
+
+  function initCut() {
+    el.cutVideoInput.addEventListener("change", () => {
+      const file = el.cutVideoInput.files && el.cutVideoInput.files[0];
+      if (!file) return;
+      if (cutState.objectUrl) URL.revokeObjectURL(cutState.objectUrl);
+      cutState.objectUrl = URL.createObjectURL(file);
+      cutState.videoFile = file;
+      cutState.duration = 0;
+      el.cutVideo.src = cutState.objectUrl;
+      el.cutVideo.load();
+      el.cutEmpty.hidden = true;
+      el.cutVideoName.textContent = file.name;
+      el.cutVideoInput.value = "";
+      el.cutStart.value = fmtCueTime(0);
+      el.cutEnd.value = fmtCueTime(0);
+      resetCutOutput();
+      updateCutSummary();
+      el.cutStatus.textContent = "视频已载入，可以设置切割范围。";
+      toast("带字幕视频已载入", "success");
+    });
+    el.cutVideo.addEventListener("loadedmetadata", () => {
+      cutState.duration = Number(el.cutVideo.duration) || 0;
+      el.cutStart.value = fmtCueTime(0);
+      el.cutEnd.value = fmtCueTime(cutState.duration);
+      updateCutSummary();
+    });
+    el.cutStartNow.addEventListener("click", () => {
+      el.cutStart.value = fmtCueTime(el.cutVideo.currentTime || 0);
+      resetCutOutput();
+      updateCutSummary();
+    });
+    el.cutEndNow.addEventListener("click", () => {
+      el.cutEnd.value = fmtCueTime(el.cutVideo.currentTime || 0);
+      resetCutOutput();
+      updateCutSummary();
+    });
+    el.cutReset.addEventListener("click", () => {
+      el.cutStart.value = fmtCueTime(0);
+      el.cutEnd.value = fmtCueTime(cutState.duration || 0);
+      resetCutOutput();
+      updateCutSummary();
+    });
+    [el.cutStart, el.cutEnd].forEach((input) => {
+      input.addEventListener("input", () => { resetCutOutput(); updateCutSummary(); });
+    });
+    $$('[data-cut-skip]').forEach((button) => {
+      button.addEventListener("click", () => seekCutBy(Number(button.dataset.cutSkip)));
+    });
+    el.cutMode.addEventListener("change", () => {
+      el.cutModeNote.textContent = el.cutMode.value === "precise"
+        ? "精确模式会重新编码视频、音频和文字字幕，切割点准确，字幕时间会同步调整；长视频需要一些时间。"
+        : "快速模式复制所有流，速度很快，但从最近关键帧开始，可能保留 1–2 秒广告；内封字幕保持原时间关系。";
+      resetCutOutput();
+    });
+    el.cutStartBtn.addEventListener("click", startCut);
+    el.tabCut.addEventListener("click", () => switchAppTab("cut"));
+    updateCutSummary();
+  }
+
   function initMux() {
     el.muxVideoInput.addEventListener("change", () => {
       const file = el.muxVideoInput.files && el.muxVideoInput.files[0];
@@ -3626,25 +3876,36 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   function switchAppTab(tab) {
     const sync = tab === "sync";
     const mux = tab === "mux";
-    el.tabExtract.classList.toggle("is-active", !sync && !mux);
+    const cut = tab === "cut";
+    el.tabExtract.classList.toggle("is-active", !sync && !mux && !cut);
     el.tabSync.classList.toggle("is-active", sync);
     el.tabMux.classList.toggle("is-active", mux);
+    el.tabCut.classList.toggle("is-active", cut);
     el.syncView.hidden = !sync;
     el.muxView.hidden = !mux;
-    el.landing.hidden = sync || mux || !!state.job;
-    el.workspace.hidden = sync || mux || !state.job;
+    el.cutView.hidden = !cut;
+    el.landing.hidden = sync || mux || cut || !!state.job;
+    el.workspace.hidden = sync || mux || cut || !state.job;
     if (sync) {
       el.video.pause();
       el.muxVideo.pause();
+      el.cutVideo.pause();
       loadSyncSources();
       window.scrollTo({ top: 0, behavior: "auto" });
     } else if (mux) {
       el.video.pause();
       el.syncVideo.pause();
+      el.cutVideo.pause();
+      window.scrollTo({ top: 0, behavior: "auto" });
+    } else if (cut) {
+      el.video.pause();
+      el.syncVideo.pause();
+      el.muxVideo.pause();
       window.scrollTo({ top: 0, behavior: "auto" });
     } else {
       el.syncVideo.pause();
       el.muxVideo.pause();
+      el.cutVideo.pause();
     }
   }
 
@@ -3752,6 +4013,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     initMisc();
     initSync();
     initMux();
+    initCut();
     checkHealth();
     await loadRecent();
     await restoreLastJob();
