@@ -125,6 +125,8 @@
     minDuration: $("#minDuration"),
     confidence: $("#confidence"),
     confidenceValue: $("#confidenceValue"),
+    minTextRatio: $("#minTextRatio"),
+    minTextRatioValue: $("#minTextRatioValue"),
     fontName: $("#fontName"),
     sceneFilter: $("#sceneFilter"),
     roiSummary: $("#roiSummary"),
@@ -694,7 +696,7 @@
     el.startBtn.classList.toggle("is-processing", processing);
     el.autoRegion.disabled = processing;
     el.roi.classList.toggle("is-locked", processing);
-    [el.conversionSel, el.minDuration, el.confidence, el.fontName, el.sceneFilter,
+    [el.conversionSel, el.minDuration, el.confidence, el.minTextRatio, el.fontName, el.sceneFilter,
       el.extractionStart, el.extractionEnd, el.rangeReset, el.rangeStartNow, el.rangeEndNow,
       el.roiX, el.roiY, el.roiW, el.roiH, el.roiApply
     ].forEach((node) => {
@@ -816,6 +818,9 @@
     el.minDuration.value = settings.min_duration != null ? settings.min_duration : 0.3;
     el.confidence.value = settings.confidence != null ? settings.confidence : 0.15;
     el.confidenceValue.textContent = Number(el.confidence.value).toFixed(2);
+    const minRatio = settings.min_text_ratio != null ? Number(settings.min_text_ratio) : 0.5;
+    el.minTextRatio.value = String(Math.round(clamp(minRatio, 0.2, 1) * 100));
+    el.minTextRatioValue.textContent = `${el.minTextRatio.value}%`;
     el.fontName.value = settings.font_name || "Heiti SC";
     if (!el.fontName.value) el.fontName.value = "Heiti SC";
     el.sceneFilter.checked = settings.scene_text_filter !== false;
@@ -849,6 +854,7 @@
       precision: ($$('input[name="precision"]', el.precisionGrid).find((input) => input.checked) || {}).value || "balanced",
       min_duration: Number(el.minDuration.value) || 0.3,
       confidence: Number(el.confidence.value) || 0.15,
+      min_text_ratio: Number(el.minTextRatio.value) / 100,
       scene_text_filter: el.sceneFilter.checked,
       font_name: el.fontName.value || "Heiti SC",
     };
@@ -3991,6 +3997,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     });
     el.confidence.addEventListener("input", () => {
       el.confidenceValue.textContent = Number(el.confidence.value).toFixed(2);
+    });
+    el.minTextRatio.addEventListener("input", () => {
+      el.minTextRatioValue.textContent = `${el.minTextRatio.value}%`;
     });
     [el.extractionStart, el.extractionEnd].forEach((input) => {
       input.addEventListener("input", updateRangeHint);

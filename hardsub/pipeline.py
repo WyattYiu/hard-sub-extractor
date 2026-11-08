@@ -63,6 +63,7 @@ DEFAULT_SETTINGS = {
     "precision": "balanced",
     "min_duration": 0.3,
     "confidence": 0.15,
+    "min_text_ratio": 0.5,
     "scene_text_filter": True,
     "font_name": "Heiti SC",
 }
@@ -163,6 +164,11 @@ def normalize_settings(raw: dict | None) -> dict:
     roi["w"] = max(0.02, min(1.0 - roi["x"], roi["w"]))
     roi["h"] = max(0.02, min(1.0 - roi["y"], roi["h"]))
     settings["roi"] = roi
+    try:
+        ratio = float(settings.get("min_text_ratio", 0.5))
+    except (TypeError, ValueError):
+        ratio = 0.5
+    settings["min_text_ratio"] = max(0.2, min(1.0, ratio))
     history = []
     raw_history = settings.get("roi_history") if isinstance(settings.get("roi_history"), list) else []
     for item in raw_history:
@@ -700,6 +706,22 @@ class _Extractor:
                 best.hits.append((sample.time, line))
         return tracks
 
+    def _filter_small_text(self, tracks: list[Track]) -> list[Track]:
+        if len(tracks) < 2:
+            return tracks
+        heights = [track.height for track in tracks]
+        # Use the tallest track as the reference; multiple corner logos can
+        # outnumber the subtitle track and make a median too permissive.
+        reference = max(heights)
+        ratio = float(self.settings.get("min_text_ratio", 0.5))
+        filtered = [
+            track for track in tracks
+            if ratio * reference <= track.height <= 2.4 * reference
+        ]
+        if filtered and len(filtered) < len(tracks):
+            self.log(f"忽略小字：移除 {len(tracks) - len(filtered)} 条过小轨迹", "info")
+        return filtered or tracks
+
     def _filter_scene_text(self, tracks: list[Track]) -> list[Track]:
         """Keep tracks whose vertical position behaves like a subtitle band.
 
@@ -708,6 +730,7 @@ class _Extractor:
         occupy one or two stable bands, so clusters with very little support are
         discarded. Tight user selections skip this heuristic to avoid surprises.
         """
+        tracks = self._filter_small_text(tracks)
         if not self.settings.get("scene_text_filter", True):
             return tracks
         if len(tracks) < 3 or self.settings["roi"]["h"] < 0.24:
@@ -761,9 +784,10 @@ class _Extractor:
         heights = [track.height for track in filtered]
         if heights:
             middle = median(heights)
+            min_ratio = float(self.settings.get("min_text_ratio", 0.5))
             sized = [
                 track for track in filtered
-                if 0.42 * middle <= track.height <= 2.4 * middle
+                if min_ratio * middle <= track.height <= 2.4 * middle
             ]
             if sized:
                 filtered = sized

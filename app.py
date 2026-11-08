@@ -76,7 +76,7 @@ def health():
         "ffmpeg": ffmpeg,
         "ffprobe": ffprobe,
         "vision": OCR_BINARY.exists(),
-        "version": "1.7.0",
+        "version": "1.8.0",
     })
 
 

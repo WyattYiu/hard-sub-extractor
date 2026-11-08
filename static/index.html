@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light">
   <title>字幕匠 · 硬字幕提取 / 同步 / 内封 / 切割</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317191f'/%3E%3Cpath d='M8 11V8h3M21 8h3v3M24 21v3h-3M11 24H8v-3M11 15h10M11 19h7' fill='none' stroke='%23f4f0e8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/styles.css?v=1.7.0">
+<link rel="stylesheet" href="/static/styles.css?v=1.8.1">
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -691,6 +691,10 @@
                   <input id="confidence" type="range" min="0.05" max="0.6" step="0.05" value="0.15">
                 </div>
                 <div class="field compact">
+                  <div class="field-label"><label for="minTextRatio">忽略过小文字</label><span id="minTextRatioValue">50%</span></div>
+                  <input id="minTextRatio" type="range" min="20" max="90" step="5" value="50">
+                </div>
+                <div class="field compact">
                   <div class="field-label"><label for="fontName">ASS 字体</label></div>
                   <select id="fontName">
                     <option value="Heiti SC">黑体 SC（推荐）</option>
@@ -711,7 +715,7 @@
 
             <div class="tip-card" id="tipCard">
               <span class="tip-icon">TIP</span>
-              <p>框选时尽量只包住字幕文字，避开台标、水印和画面内的大字。开启「过滤画面原有文字」后，程序会按位置和停留时间忽略异常文字。</p>
+              <p>框选时尽量只包住字幕文字，避开台标、水印和画面内的大字。开启「过滤画面原有文字」后，程序会按位置和停留时间忽略异常文字；高级选项里的「忽略过小文字」可过滤与字幕重叠的台标和角标。</p>
             </div>
           </aside>
         </div>
@@ -795,6 +799,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=1.7.0"></script>
+  <script src="/static/app.js?v=1.8.1"></script>
 </body>
 </html>
