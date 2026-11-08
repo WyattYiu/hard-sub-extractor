@@ -27,6 +27,7 @@ from .vision import VisionEngine, VisionError
 
 ProgressFn = Callable[[float, str, str, dict], None]
 LogFn = Callable[[str, str], None]
+PartialFn = Callable[[list[dict]], None]
 
 VISION_LANGUAGES = {
     "zh": ["zh-Hans", "zh-Hant"],
@@ -360,6 +361,7 @@ class _Extractor:
         progress: ProgressFn,
         log: LogFn,
         cancel_event: threading.Event,
+        partial: PartialFn | None = None,
     ):
         self.video = video
         self.probe = probe
@@ -369,6 +371,10 @@ class _Extractor:
         self.progress = progress
         self.log = log
         self.cancel = cancel_event
+        self.partial_cb = partial
+        self.partial_cues: list[dict] = []
+        self._preview_stop = threading.Event()
+        self._preview_thread: threading.Thread | None = None
         self.scan_fps, self.sample_interval = PRECISION[settings["precision"]]
         self.scan_fps = min(self.scan_fps, max(0.5, probe.get("fps") or self.scan_fps))
         video_duration = max(0.1, float(probe.get("duration") or 0.0))
@@ -397,6 +403,7 @@ class _Extractor:
         self.total_estimate = max(1, int(round(self.segment_duration * self.scan_fps)))
         self.ocr_calls = 0
         self._last_publish = 0.0
+        self._partial_published = 0
 
     def _check_cancel(self):
         if self.cancel.is_set():
@@ -506,6 +513,60 @@ class _Extractor:
                 if item is not None:
                     self.work_queue.task_done()
 
+    def _publish_partial(self, cues: list[dict]) -> None:
+        if self.partial_cb is None:
+            return
+        try:
+            self.partial_cb(cues)
+        except Exception:
+            pass
+
+    def _preview_loop(self) -> None:
+        last_published = 0
+        while not self._preview_stop.is_set() and not self.cancel.is_set():
+            if self._preview_stop.wait(2.5):
+                return
+            try:
+                with self.lock:
+                    samples = sorted(self.samples, key=lambda sample: sample.time)
+                if len(samples) < 6:
+                    continue
+                cutoff = samples[-1].time - 1.5
+                if cutoff - self.extraction_start < 3.0:
+                    continue
+                window_start = max(self.extraction_start, cutoff - 90.0)
+                chunk = [sample for sample in samples if window_start <= sample.time <= cutoff]
+                if len(chunk) < 4:
+                    continue
+                tracks = self._build_tracks(chunk)
+                raw = self._tracks_to_cues(tracks, chunk)
+                converted = []
+                for index, cue in enumerate(raw, 1):
+                    text = convert_multiline_preserving_scripts(
+                        cue["text"], self.settings["conversion"]
+                    ).strip()
+                    if not text:
+                        continue
+                    converted.append({
+                        "id": index,
+                        "start": round(cue["start"], 3),
+                        "end": round(cue["end"], 3),
+                        "text": text,
+                        "confidence": cue.get("confidence", 0.0),
+                    })
+                kept = [cue for cue in self.partial_cues if cue["end"] < window_start - 0.3]
+                merged = kept + converted
+                merged.sort(key=lambda cue: (cue["start"], cue["end"]))
+                for index, cue in enumerate(merged, 1):
+                    cue["id"] = index
+                if merged and (len(merged) != self._partial_published or cutoff - last_published > 2.0):
+                    self.partial_cues = merged
+                    self._partial_published = len(merged)
+                    last_published = cutoff
+                    self._publish_partial([dict(cue) for cue in merged])
+            except Exception:
+                continue
+
     def run(self) -> dict:
         started = time.time()
         self._publish(0.03, "ocr", "正在准备识别字幕…", force=True)
@@ -519,6 +580,9 @@ class _Extractor:
         consumers = [threading.Thread(target=self._ocr_consumer, daemon=True) for _ in range(workers)]
         for thread in consumers:
             thread.start()
+        if self.partial_cb is not None:
+            self._preview_thread = threading.Thread(target=self._preview_loop, daemon=True)
+            self._preview_thread.start()
 
         scan_error = None
         try:
@@ -540,6 +604,9 @@ class _Extractor:
                             self._drain_queue()
             for thread in consumers:
                 thread.join()
+        self._preview_stop.set()
+        if self._preview_thread is not None:
+            self._preview_thread.join(timeout=2.0)
         if scan_error == "cancelled" or self.cancel.is_set():
             raise CancelledError("任务已取消")
         if scan_error:
@@ -926,13 +993,14 @@ def run_extraction(
     log: LogFn,
     cancel_event: threading.Event,
     ocr_workers: int = 4,
+    partial: PartialFn | None = None,
 ) -> dict:
     settings = normalize_settings(raw_settings)
     engine = VisionEngine(ocr_workers=ocr_workers)
     try:
         extractor = _Extractor(
             video, probe, settings, engine, Path(work_dir),
-            progress, log, cancel_event,
+            progress, log, cancel_event, partial,
         )
         result = extractor.run()
         result["settings"] = settings

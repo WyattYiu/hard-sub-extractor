@@ -166,6 +166,9 @@
     progressBar: $("#progressBar"),
     progressMessage: $("#progressMessage"),
     stageList: $("#stageList"),
+    partialPreview: $("#partialPreview"),
+    partialCount: $("#partialCount"),
+    partialList: $("#partialList"),
     logBox: $("#logBox"),
     logToggle: $("#logToggle"),
     cancelBtn: $("#cancelBtn"),
@@ -239,6 +242,7 @@
     selected: new Set(),
     selectionAnchor: null,
     pageCueIds: [],
+    partialCues: [],
     undoStack: [],
     redoStack: [],
     pendingMergeIds: null,
@@ -606,6 +610,7 @@
     el.video.load();
     state.job = null;
     state.cues = [];
+    state.partialCues = [];
     state.videoUrl = null;
     state.processing = false;
     localStorage.removeItem("hardsub.lastJob");
@@ -660,6 +665,7 @@
     el.liveTime.textContent = "等待播放";
 
     el.resultsCard.hidden = true;
+    clearPartialCues();
     el.progressCard.hidden = true;
     el.progressCard.classList.remove("is-error", "is-done");
     el.captionOverlay.hidden = true;
@@ -1520,6 +1526,7 @@
       setProcessing(false);
       if (job.status === "done") {
         el.progressCard.hidden = true;
+        clearPartialCues();
         renderResults();
         el.startBtn.querySelector("span").textContent = "重新提取字幕";
         toast(`识别完成，共 ${state.cues.length} 条字幕`, "success");
@@ -1544,6 +1551,7 @@
           setProcessing(true);
           el.progressCard.hidden = false;
           updateProgress(state.job);
+          if (Array.isArray(payload.job.partial_cues)) renderPartialCues(payload.job.partial_cues);
         } else if (state.job.status === "done" || state.job.status === "error" || state.job.status === "cancelled") {
           const full = Array.isArray(payload.job.cues) ? payload.job : state.job;
           await finalizeFromServer(state.job.id, full);
@@ -1553,6 +1561,10 @@
     }
     if (payload.type === "log") {
       appendLog(payload.log);
+      return;
+    }
+    if (payload.type === "partial") {
+      renderPartialCues(payload.cues || []);
       return;
     }
     if (payload.type === "state") {
@@ -1575,6 +1587,43 @@
   }
 
   // ---------------------------------------------------------------- results
+  function clearPartialCues() {
+    state.partialCues = [];
+    if (el.partialPreview) {
+      el.partialPreview.hidden = true;
+      el.partialList.replaceChildren();
+    }
+  }
+
+  function renderPartialCues(cues) {
+    if (!el.partialPreview) return;
+    if (!Array.isArray(cues) || !cues.length) {
+      clearPartialCues();
+      return;
+    }
+    state.partialCues = cues;
+    const wasNearBottom = el.partialList.scrollHeight - el.partialList.scrollTop - el.partialList.clientHeight < 48;
+    el.partialPreview.hidden = false;
+    el.partialCount.textContent = `${cues.length} 条`;
+    const fragment = document.createDocumentFragment();
+    cues.forEach((cue) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "partial-row";
+      const time = document.createElement("span");
+      time.className = "partial-time";
+      time.textContent = `${fmtCueTime(cue.start)} – ${fmtCueTime(cue.end)}`;
+      const text = document.createElement("span");
+      text.className = "partial-text";
+      text.textContent = cue.text || "";
+      row.append(time, text);
+      row.addEventListener("click", () => seekToCue(cue));
+      fragment.appendChild(row);
+    });
+    el.partialList.replaceChildren(fragment);
+    if (wasNearBottom) el.partialList.scrollTop = el.partialList.scrollHeight;
+  }
+
   function renderResults() {
     const job = state.job;
     if (!job) return;
@@ -2574,6 +2623,7 @@
     if (state.dirty) await saveCues(true);
     setProcessing(true);
     el.resultsCard.hidden = true;
+    clearPartialCues();
     state.cues = [];
     state.filter = "";
     state.minConfidence = 0;
@@ -2590,6 +2640,7 @@
     el.confidenceFilter.value = "all";
     el.progressCard.hidden = false;
     el.progressCard.classList.remove("is-error", "is-done");
+    el.progressCard.scrollIntoView({ behavior: "smooth", block: "start" });
     el.progressTitle.textContent = "正在识别";
     el.progressPct.textContent = "0%";
     el.progressBar.style.width = "0%";

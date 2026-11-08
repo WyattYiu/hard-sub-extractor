@@ -83,6 +83,7 @@ class Job:
         self.status = status
         self.settings = normalize_settings(settings)
         self.cues = cues or []
+        self.partial_cues: list[dict] = []
         self.stats = stats or {}
         self.error = error
         self.poster = poster
@@ -113,10 +114,12 @@ class Job:
                 "size": self.probe.get("size", 0),
                 "has_cues": bool(self.cues),
                 "cue_count": len(self.cues),
+                "partial_count": len(self.partial_cues),
                 "logs": self.logs[-80:],
             }
             if include_cues:
                 data["cues"] = self.cues
+                data["partial_cues"] = list(self.partial_cues)
             return data
 
     def _payload(self, include_cues: bool = False) -> dict:
@@ -183,6 +186,13 @@ class Job:
             if len(self.logs) > 300:
                 del self.logs[:100]
         self.publish({"type": "log", "log": entry})
+
+    def update_partial(self, cues: list[dict]):
+        with self.lock:
+            if self.status != "processing":
+                return
+            self.partial_cues = list(cues)
+        self.publish({"type": "partial", "cues": self.partial_cues, "count": len(self.partial_cues)})
 
     def update_progress(self, value: float, stage: str, message: str, stats: dict | None = None):
         with self.lock:
@@ -371,10 +381,11 @@ class JobManager:
             result = run_extraction(
                 str(job.video_path), job.probe, job.settings,
                 work_dir, job.update_progress, job.log,
-                job.cancel_event, ocr_workers=4,
+                job.cancel_event, ocr_workers=4, partial=job.update_partial,
             )
             with job.lock:
                 job.cues = result["cues"]
+                job.partial_cues = []
                 job.stats = result["stats"]
                 job.settings = result["settings"]
                 job.status = "done"

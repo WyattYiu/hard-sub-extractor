@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light">
   <title>字幕匠 · 硬字幕提取 / 同步 / 内封 / 切割</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317191f'/%3E%3Cpath d='M8 11V8h3M21 8h3v3M24 21v3h-3M11 24H8v-3M11 15h10M11 19h7' fill='none' stroke='%23f4f0e8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/styles.css?v=1.6.4">
+<link rel="stylesheet" href="/static/styles.css?v=1.7.0">
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -549,6 +549,14 @@
                 <div class="stage-item" data-stage="build"><i></i><span>整理时间轴</span></div>
                 <div class="stage-item" data-stage="done"><i></i><span>完成</span></div>
               </div>
+              <div class="partial-preview" id="partialPreview" hidden>
+                <div class="partial-preview-head">
+                  <span>已识别字幕预览</span>
+                  <b id="partialCount">0 条</b>
+                </div>
+                <div class="partial-preview-list" id="partialList"></div>
+                <p class="partial-preview-note">这是识别中的增量结果，任务完成前可能继续变化；不满意可以立即取消。</p>
+              </div>
               <div class="log-head"><span>运行日志</span><button id="logToggle" type="button">收起</button></div>
               <div class="log-box" id="logBox"></div>
               <button class="cancel-btn" id="cancelBtn" type="button">取消任务</button>
@@ -787,6 +795,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=1.6.4"></script>
+  <script src="/static/app.js?v=1.7.0"></script>
 </body>
 </html>
