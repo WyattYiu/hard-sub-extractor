@@ -1,6 +1,10 @@
 # 字幕匠 · HardSub Studio
 
-**当前版本：v1.5.1** · [更新日志](CHANGELOG.md)
+[![Release](https://img.shields.io/github/v/release/WyattYiu/hard-sub-extractor?label=release)](https://github.com/WyattYiu/hard-sub-extractor/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-macOS%2012%2B-lightgrey)](https://github.com/WyattYiu/hard-sub-extractor)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/WyattYiu/hard-sub-extractor)
+
+**当前版本：v1.5.1** · [下载 Release](https://github.com/WyattYiu/hard-sub-extractor/releases/latest) · [更新日志](CHANGELOG.md)
 
 从视频画面里提取**硬字幕**（烧录在画面上的字幕），生成可编辑、可下载的 **SRT / ASS** 文件；也可以把字幕同步到另一份纯净视频，或直接封装成带字幕轨道的 MKV。识别、同步和内封都在本机完成，视频不会上传到云端。
 
@@ -46,9 +50,10 @@
 
 ## 下载与安装
 
-从 GitHub Releases 下载源码包，或克隆仓库后运行：
+从 [GitHub Releases](https://github.com/WyattYiu/hard-sub-extractor/releases/latest) 下载源码包，或克隆仓库：
 
 ```bash
+git clone https://github.com/WyattYiu/hard-sub-extractor.git
 cd hard-sub-extractor
 ./setup.sh
 ./start.sh
