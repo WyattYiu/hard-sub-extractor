@@ -5,3 +5,5 @@ bin/vision-ocr
 .DS_Store
 
 .ruff_cache/
+
+tests/
