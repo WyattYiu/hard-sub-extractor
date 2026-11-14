@@ -222,7 +222,9 @@ class Job:
             "display_width": self.probe.get("display_width") or self.probe.get("width"),
             "display_height": self.probe.get("display_height") or self.probe.get("height"),
             "roi": self.settings.get("roi", {}),
-            "font_name": self.settings.get("font_name") or "Heiti SC",
+            "font_name": self.settings.get("font_name") or "Kaiti SC",
+            "font_size": self.settings.get("font_size") or 70,
+            "border_width": self.settings.get("border_width", 2.0),
             "line_height_px": self.stats.get("line_height_px") or 0,
             "title": safe_stem(self.name),
         }
@@ -230,12 +232,19 @@ class Job:
     def srt(self) -> str:
         return build_srt(self.cues)
 
-    def ass(self) -> str:
-        return build_ass(self.cues, self._meta())
+    def ass(self, style: dict | None = None) -> str:
+        meta = self._meta()
+        if style:
+            meta.update(style)
+        return build_ass(self.cues, meta)
 
     def write_outputs(self):
         write_text_file(self.dir / "result.srt", self.srt())
         write_text_file(self.dir / "result.ass", self.ass())
+
+
+MAX_JOBS = 8
+MAX_JOB_BYTES = 20 * 1024 * 1024 * 1024
 
 
 class JobManager:
@@ -279,6 +288,41 @@ class JobManager:
                 self.jobs[job.id] = job
             except Exception:
                 continue
+
+    def prune(self) -> None:
+        """Limit saved source videos so data/jobs cannot grow forever."""
+        with self.lock:
+            jobs = sorted(
+                self.jobs.values(),
+                key=lambda job: job.dir.stat().st_mtime if job.dir.exists() else 0,
+            )
+        total = 0
+        sizes = {}
+        for job in jobs:
+            size = 0
+            try:
+                for path in job.dir.rglob("*"):
+                    if path.is_file():
+                        size += path.stat().st_size
+            except OSError:
+                pass
+            sizes[job.id] = size
+            total += size
+        remove = []
+        remaining = len(jobs)
+        for job in jobs:
+            if remaining <= MAX_JOBS and total <= MAX_JOB_BYTES:
+                break
+            if job.status == "processing":
+                continue
+            remove.append(job.id)
+            remaining -= 1
+            total -= sizes.get(job.id, 0)
+        for job_id in remove:
+            try:
+                self.delete(job_id)
+            except Exception:
+                pass
 
     # ---- creation -------------------------------------------------------
     def create(self, file_storage, original_name: str | None) -> Job:
@@ -340,10 +384,6 @@ class JobManager:
         if job.status == "processing":
             raise BusyError("这个任务正在运行中")
         with self.lock:
-            if self.active_id:
-                active = self.jobs.get(self.active_id)
-                if active and active.status == "processing":
-                    raise BusyError("已有任务正在运行，请等待完成或先取消")
             incoming = dict(raw_settings or {})
             if "roi_history" not in incoming:
                 incoming["roi_history"] = list(job.settings.get("roi_history") or [])
@@ -357,12 +397,21 @@ class JobManager:
             job.message = "正在启动识别引擎…"
             job.status = "processing"
             job.cancel_event = threading.Event()
-            self.active_id = job_id
         job.log("开始识别任务", "info")
         job.save()
         job.publish({"type": "state", **job._payload()})
         thread = threading.Thread(target=self._run, args=(job,), daemon=True)
         thread.start()
+        return job
+
+    def save_settings(self, job_id: str, raw_settings: dict) -> Job:
+        job = self.get(job_id)
+        if job.status == "processing":
+            raise BusyError("识别过程中不能修改设置")
+        with self.lock:
+            job.settings = normalize_settings(raw_settings)
+            _remember_roi(job.settings)
+        job.save()
         return job
 
     def cancel(self, job_id: str) -> Job:
@@ -416,9 +465,6 @@ class JobManager:
             job.log(f"识别失败：{exc}", "error")
             job.publish({"type": "finished", **_payload_with_cues(job)})
         finally:
-            with self.lock:
-                if self.active_id == job.id:
-                    self.active_id = None
             shutil.rmtree(work_dir, ignore_errors=True)
 
     def detect_region(self, job_id: str, languages=None, start_time=None, end_time=None) -> dict:
@@ -478,12 +524,12 @@ def _payload_with_cues(job: Job) -> dict:
     return payload
 
 
-def subtitle_response(job: Job, fmt: str) -> tuple[str, str, str]:
+def subtitle_response(job: Job, fmt: str, style: dict | None = None) -> tuple[str, str, str]:
     fmt = fmt.lower()
     if fmt == "srt":
         return job.srt(), "application/x-subrip; charset=utf-8", f"{safe_stem(job.name)}.srt"
     if fmt == "ass":
-        return job.ass(), "text/x-ssa; charset=utf-8", f"{safe_stem(job.name)}.ass"
+        return job.ass(style), "text/x-ssa; charset=utf-8", f"{safe_stem(job.name)}.ass"
     raise JobError("只支持 srt 或 ass 格式")
 
 

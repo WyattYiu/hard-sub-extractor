@@ -204,7 +204,7 @@ def iter_roi_frames(
         raise MediaError("字幕区域太小，请重新框选")
 
     if upscale_small and w < 1000:
-        out_w = min(target_width, w * 2)
+        out_w = min(1920, w * 3)
     else:
         out_w = min(target_width, w)
     out_w -= out_w % 2

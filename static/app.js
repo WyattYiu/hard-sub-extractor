@@ -12,8 +12,34 @@
     tabSync: $("#tabSync"),
     tabMux: $("#tabMux"),
     tabCut: $("#tabCut"),
+    tabTranslate: $("#tabTranslate"),
+    translateView: $("#translateView"),
+    translateFileInput: $("#translateFileInput"),
+    translateDrop: $("#translateDrop"),
+    translateFileName: $("#translateFileName"),
+    translateSource: $("#translateSource"),
+    translateTarget: $("#translateTarget"),
+    translateBilingual: $("#translateBilingual"),
+    translateStartBtn: $("#translateStartBtn"),
+    translateProgress: $("#translateProgress"),
+    translateProgressLabel: $("#translateProgressLabel"),
+    translateProgressPct: $("#translateProgressPct"),
+    translateProgressBar: $("#translateProgressBar"),
+    translateStatus: $("#translateStatus"),
+    translatePreview: $("#translatePreview"),
+    translatePreviewCount: $("#translatePreviewCount"),
+    translateOutputFormat: $("#translateOutputFormat"),
+    translateDownload: $("#translateDownload"),
+    translateTaskList: $("#translateTaskList"),
+    translateNewTask: $("#translateNewTask"),
+    translateSelectAll: $("#translateSelectAll"),
+    translateDeleteSelected: $("#translateDeleteSelected"),
+    translateRunSelected: $("#translateRunSelected"),
     cutView: $("#cutView"),
     cutVideo: $("#cutVideo"),
+    cutPlayBtn: $("#cutPlayBtn"),
+    cutTimeline: $("#cutTimeline"),
+    cutTimeLabel: $("#cutTimeLabel"),
     cutEmpty: $("#cutEmpty"),
     cutVideoInput: $("#cutVideoInput"),
     cutVideoName: $("#cutVideoName"),
@@ -32,8 +58,16 @@
     cutProgressPct: $("#cutProgressPct"),
     cutProgressBar: $("#cutProgressBar"),
     cutDownload: $("#cutDownload"),
+    cutTaskList: $("#cutTaskList"),
+    cutNewTask: $("#cutNewTask"),
+    cutSelectAll: $("#cutSelectAll"),
+    cutDeleteSelected: $("#cutDeleteSelected"),
+    cutRunSelected: $("#cutRunSelected"),
     muxView: $("#muxView"),
     muxVideo: $("#muxVideo"),
+    muxPlayBtn: $("#muxPlayBtn"),
+    muxTimeline: $("#muxTimeline"),
+    muxTimeLabel: $("#muxTimeLabel"),
     muxOverlay: $("#muxOverlay"),
     muxEmpty: $("#muxEmpty"),
     muxVideoInput: $("#muxVideoInput"),
@@ -43,6 +77,8 @@
     muxTrackSummary: $("#muxTrackSummary"),
     muxLanguage: $("#muxLanguage"),
     muxTitle: $("#muxTitle"),
+    muxOffset: $("#muxOffset"),
+    muxOutputName: $("#muxOutputName"),
     muxDefault: $("#muxDefault"),
     muxStartBtn: $("#muxStartBtn"),
     muxStatus: $("#muxStatus"),
@@ -51,7 +87,20 @@
     muxProgressPct: $("#muxProgressPct"),
     muxProgressBar: $("#muxProgressBar"),
     muxDownload: $("#muxDownload"),
+    muxTaskList: $("#muxTaskList"),
+    muxNewTask: $("#muxNewTask"),
+    muxSelectAll: $("#muxSelectAll"),
+    muxDeleteSelected: $("#muxDeleteSelected"),
+    muxRunSelected: $("#muxRunSelected"),
+    syncTaskList: $("#syncTaskList"),
+    syncNewTask: $("#syncNewTask"),
+    syncSelectAll: $("#syncSelectAll"),
+    syncDeleteSelected: $("#syncDeleteSelected"),
+    syncRunSelected: $("#syncRunSelected"),
     syncVideo: $("#syncVideo"),
+    syncPlayBtn: $("#syncPlayBtn"),
+    syncTimeline: $("#syncTimeline"),
+    syncTimeLabel: $("#syncTimeLabel"),
     syncStage: $("#syncStage"),
     syncOverlay: $("#syncOverlay"),
     syncEmpty: $("#syncEmpty"),
@@ -88,11 +137,23 @@
     recentGrid: $("#recentGrid"),
     backBtn: $("#backBtn"),
     deleteBtn: $("#deleteBtn"),
+    extractTaskList: $("#extractTaskList"),
+    extractResultsTab: $("#extractResultsTab"),
+    extractSettingsTab: $("#extractSettingsTab"),
+    extractResultsPane: $("#extractResultsPane"),
+    extractSettingsPane: $("#extractSettingsPane"),
+    extractNewTask: $("#extractNewTask"),
+    extractSelectAll: $("#extractSelectAll"),
+    extractRunSelected: $("#extractRunSelected"),
+    extractDeleteSelected: $("#extractDeleteSelected"),
+    saveSettingsBtn: $("#saveSettingsBtn"),
     jobName: $("#jobName"),
     jobMeta: $("#jobMeta"),
     video: $("#video"),
     videoStage: $("#videoStage"),
     stageEmpty: $("#stageEmpty"),
+    extractUploadBtn: $("#extractUploadBtn"),
+    stageUploadStatus: $("#stageUploadStatus"),
     roi: $("#roi"),
     captionOverlay: $("#captionOverlay"),
     playBtn: $("#playBtn"),
@@ -125,9 +186,14 @@
     minDuration: $("#minDuration"),
     confidence: $("#confidence"),
     confidenceValue: $("#confidenceValue"),
-    minTextRatio: $("#minTextRatio"),
-    minTextRatioValue: $("#minTextRatioValue"),
+    minTextHeight: $("#minTextHeight"),
+    minTextGuide: $("#minTextGuide"),
+    minTextGuideHandle: $("#minTextGuideHandle"),
+    minTextGuideLabel: $("#minTextGuideLabel"),
+    minTextGuideBtn: $("#minTextGuideBtn"),
     fontName: $("#fontName"),
+    fontSize: $("#fontSize"),
+    borderWidth: $("#borderWidth"),
     sceneFilter: $("#sceneFilter"),
     roiSummary: $("#roiSummary"),
     roiMiniPoster: $("#roiMiniPoster"),
@@ -211,7 +277,11 @@
     compatUrl: null,
     auto: null,
     pendingAuto: null,
+    taskId: "sync-1",
   };
+  const syncTasks = [];
+  const selectedSyncTasks = new Set();
+  let syncTaskSeq = 1;
 
   const muxState = {
     videoFile: null,
@@ -221,7 +291,18 @@
     outputUrl: null,
     pollTimer: null,
     pollToken: null,
+    titleAuto: true,
+    outputNameAuto: true,
+    draftId: null,
   };
+  const translateDrafts = [];
+  const selectedTranslateTasks = new Set();
+  let translateDraftSeq = 0;
+  let translateBatchBusy = false;
+  const muxDrafts = [];
+  const selectedMuxTasks = new Set();
+  let muxDraftSeq = 0;
+  let muxBatchBusy = false;
 
   const cutState = {
     videoFile: null,
@@ -230,7 +311,12 @@
     pollTimer: null,
     pollToken: null,
     outputUrl: null,
+    draftId: null,
   };
+  const cutDrafts = [];
+  const selectedCutTasks = new Set();
+  let cutDraftSeq = 0;
+  let cutBatchBusy = false;
 
   const state = {
     job: null,
@@ -264,6 +350,12 @@
     processing: false,
     dragging: null,
     activeCueId: null,
+    minGuideVisible: false,
+    translateFile: null,
+    translateTimer: null,
+    translateToken: null,
+    selectedExtractTasks: new Set(),
+    translateDraftId: null,
     health: null,
   };
 
@@ -480,6 +572,9 @@
     el.fileInput.addEventListener("change", () => {
       if (el.fileInput.files && el.fileInput.files[0]) uploadFile(el.fileInput.files[0]);
     });
+    el.stageEmpty.addEventListener("click", (event) => {
+      if (event.target.closest("#extractUploadBtn")) el.fileInput.click();
+    });
     ["dragenter", "dragover"].forEach((name) => {
       el.dropzone.addEventListener(name, (event) => {
         event.preventDefault();
@@ -514,6 +609,16 @@
     el.uploadBar.style.width = "0%";
     el.uploadPct.textContent = "0%";
     el.uploadLabel.textContent = "正在上传视频…";
+    const stageStatus = $("#stageUploadStatus");
+    if (stageStatus) {
+      stageStatus.hidden = false;
+      stageStatus.textContent = "正在上传 0%";
+    }
+    const stageBtn = $("#extractUploadBtn");
+    if (stageBtn) {
+      stageBtn.disabled = true;
+      stageBtn.textContent = "正在上传…";
+    }
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/jobs");
@@ -522,6 +627,8 @@
       const pct = Math.round((event.loaded / event.total) * 100);
       el.uploadBar.style.width = `${pct}%`;
       el.uploadPct.textContent = `${pct}%`;
+      const stageStatus = $("#stageUploadStatus");
+      if (stageStatus) stageStatus.textContent = `正在上传 ${pct}%`;
       if (pct >= 100) el.uploadLabel.textContent = "正在读取视频信息…";
     };
     xhr.onerror = () => {
@@ -548,6 +655,13 @@
     el.fileInput.value = "";
     el.dropzone.hidden = false;
     el.uploadProgress.hidden = true;
+    const stageStatus = $("#stageUploadStatus");
+    if (stageStatus) stageStatus.hidden = true;
+    const stageBtn = $("#extractUploadBtn");
+    if (stageBtn) {
+      stageBtn.disabled = false;
+      stageBtn.textContent = "选择视频";
+    }
   }
 
   // ---------------------------------------------------------------- open / close jobs
@@ -556,6 +670,7 @@
     el.syncView.hidden = true;
     el.muxView.hidden = true;
     el.cutView.hidden = true;
+    el.translateView.hidden = true;
     el.syncVideo.pause();
     el.muxVideo.pause();
     el.cutVideo.pause();
@@ -563,6 +678,7 @@
     el.tabSync.classList.remove("is-active");
     el.tabMux.classList.remove("is-active");
     el.tabCut.classList.remove("is-active");
+    el.tabTranslate.classList.remove("is-active");
     try {
       const job = await api(`/api/jobs/${jobId}`);
       state.job = job;
@@ -576,19 +692,26 @@
       el.searchInput.value = "";
       el.confidenceFilter.value = "all";
       el.landing.hidden = true;
+      el.landing.classList.remove("is-job-open");
       el.workspace.hidden = false;
-      window.scrollTo({ top: 0, behavior: "auto" });
+      el.workspace.classList.remove("is-empty");
+      el.deleteBtn.hidden = false;
+      el.startBtn.disabled = false;
       applyJob(job);
+      el.workspace.scrollIntoView({ behavior: "auto", block: "start" });
       if (job.status === "processing") {
+        switchExtractPanel("settings");
         showProgress(job);
         connectEvents(job.id);
       } else if (job.status === "done") {
         el.progressCard.hidden = true;
         renderResults();
       } else if (job.status === "error" || job.status === "cancelled") {
+        switchExtractPanel("settings");
         showProgress(job, true);
       }
       loadRecent();
+      refreshExtractTasks();
     } catch (error) {
       localStorage.removeItem("hardsub.lastJob");
       toast(error.message || "无法打开任务", "error");
@@ -602,19 +725,43 @@
     el.syncView.hidden = true;
     el.muxView.hidden = true;
     el.cutView.hidden = true;
+    el.translateView.hidden = true;
     el.tabExtract.classList.add("is-active");
     el.tabSync.classList.remove("is-active");
     el.tabMux.classList.remove("is-active");
     el.tabCut.classList.remove("is-active");
-    el.workspace.hidden = true;
-    el.landing.hidden = false;
+    el.tabTranslate.classList.remove("is-active");
+    el.workspace.hidden = false;
+    el.workspace.classList.add("is-empty");
+    el.landing.hidden = true;
+    el.landing.classList.remove("is-job-open");
+    el.jobName.textContent = "选择视频开始提取";
+    el.jobMeta.replaceChildren();
+    el.deleteBtn.hidden = true;
+    el.startBtn.disabled = true;
+    el.videoStage.classList.remove("is-ready");
+    el.stageEmpty.innerHTML = `
+      <div class="extract-empty-icon"><svg viewBox="0 0 32 32" fill="none"><rect x="3" y="6" width="26" height="20" rx="4" stroke="currentColor" stroke-width="1.6"/><path d="M3 21l7-6 5 4 4-4 10 8" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="21" cy="12" r="2.4" stroke="currentColor" stroke-width="1.6"/></svg></div>
+      <b>选择视频开始提取</b>
+      <span>拖入视频，或点击下方按钮</span>
+      <button class="extract-upload-btn" id="extractUploadBtn" type="button">选择视频</button>
+      <p class="stage-upload-status" id="stageUploadStatus" hidden></p>`;
+    el.stageEmpty.hidden = false;
+    el.extractUploadBtn = $("#extractUploadBtn");
+    el.stageUploadStatus = $("#stageUploadStatus");
     el.video.removeAttribute("src");
     el.video.load();
     state.job = null;
     state.cues = [];
     state.partialCues = [];
+    state.minGuideVisible = false;
+    if (el.minTextGuide) el.minTextGuide.hidden = true;
     state.videoUrl = null;
     state.processing = false;
+    state.duration = 0;
+    applySettings({});
+    setRoi({ x: 0.03, y: 0.52, w: 0.94, h: 0.45 });
+    switchExtractPanel("settings");
     localStorage.removeItem("hardsub.lastJob");
     loadRecent();
     window.scrollTo({ top: 0 });
@@ -696,7 +843,7 @@
     el.startBtn.classList.toggle("is-processing", processing);
     el.autoRegion.disabled = processing;
     el.roi.classList.toggle("is-locked", processing);
-    [el.conversionSel, el.minDuration, el.confidence, el.minTextRatio, el.fontName, el.sceneFilter,
+    [el.conversionSel, el.minDuration, el.confidence, el.minTextHeight, el.fontName, el.fontSize, el.borderWidth, el.sceneFilter,
       el.extractionStart, el.extractionEnd, el.rangeReset, el.rangeStartNow, el.rangeEndNow,
       el.roiX, el.roiY, el.roiW, el.roiH, el.roiApply
     ].forEach((node) => {
@@ -709,6 +856,7 @@
     });
     $$('input[name="precision"]', el.precisionGrid).forEach((input) => { input.disabled = processing; });
     $$(".mini-btn[data-preset]").forEach((button) => { button.disabled = processing; });
+    if (el.minTextGuide) el.minTextGuide.classList.toggle("is-locked", processing);
     if (processing) el.startBtn.querySelector("span").textContent = "正在识别…";
   }
 
@@ -810,7 +958,7 @@
   function applySettings(settings) {
     setLanguageSelection(settings);
     el.conversionSel.value = settings.conversion || "none";
-    const precision = settings.precision || "balanced";
+    const precision = (!settings.precision || settings.precision === "balanced") ? "fine" : settings.precision;
     $$('input[name="precision"]', el.precisionGrid).forEach((input) => {
       input.checked = input.value === precision;
     });
@@ -818,11 +966,20 @@
     el.minDuration.value = settings.min_duration != null ? settings.min_duration : 0.3;
     el.confidence.value = settings.confidence != null ? settings.confidence : 0.15;
     el.confidenceValue.textContent = Number(el.confidence.value).toFixed(2);
-    const minRatio = settings.min_text_ratio != null ? Number(settings.min_text_ratio) : 0.5;
-    el.minTextRatio.value = String(Math.round(clamp(minRatio, 0.2, 1) * 100));
-    el.minTextRatioValue.textContent = `${el.minTextRatio.value}%`;
-    el.fontName.value = settings.font_name || "Heiti SC";
-    if (!el.fontName.value) el.fontName.value = "Heiti SC";
+    el.minTextHeight.value = String(settings.min_text_height_px != null ? settings.min_text_height_px : 14);
+    state.minGuideVisible = false;
+    if (el.minTextGuide) el.minTextGuide.hidden = true;
+    if (el.minTextGuideBtn) el.minTextGuideBtn.classList.remove("is-active");
+    // Older jobs stored the previous Songti default but no font_size. Treat
+    // them as the new Kaiti default; jobs that explicitly saved font_size stay.
+    const legacyFont = settings.font_name === "Songti SC";
+    el.fontName.value = legacyFont ? "Kaiti SC" : (settings.font_name || "Kaiti SC");
+    if (!el.fontName.value) el.fontName.value = "Kaiti SC";
+    let fontSize = settings.font_size != null ? Number(settings.font_size) : 70;
+    if (fontSize === 50) fontSize = 70; // old default
+    el.fontSize.value = fontSize;
+    el.borderWidth.value = settings.border_width != null ? settings.border_width : 2;
+    updateAssDownloadLink();
     el.sceneFilter.checked = settings.scene_text_filter !== false;
     const totalDuration = state.duration || 0;
     let start = Number(settings.extraction_start ?? 0);
@@ -854,9 +1011,11 @@
       precision: ($$('input[name="precision"]', el.precisionGrid).find((input) => input.checked) || {}).value || "balanced",
       min_duration: Number(el.minDuration.value) || 0.3,
       confidence: Number(el.confidence.value) || 0.15,
-      min_text_ratio: Number(el.minTextRatio.value) / 100,
+      min_text_height_px: Number(el.minTextHeight.value) || 14,
       scene_text_filter: el.sceneFilter.checked,
-      font_name: el.fontName.value || "Heiti SC",
+      font_name: el.fontName.value || "Kaiti SC",
+      font_size: Number(el.fontSize.value) || 70,
+      border_width: Number(el.borderWidth.value) || 2,
     };
   }
 
@@ -915,14 +1074,14 @@
       const input = $('input[name="precision"]', label);
       label.classList.toggle("is-checked", input.checked);
     });
-    const hints = { fast: "更快", balanced: "推荐", fine: "更准" };
+    const hints = { fast: "更快", balanced: "标准", fine: "推荐" };
     el.precisionHint.textContent = hints[precision] || "推荐";
     const descriptions = {
       fast: "快速模式：约 1.5 帧/秒，适合对速度要求高的影片。",
       balanced: "标准模式：约 2 帧/秒，速度与时间轴精度的平衡。",
-      fine: "精细模式：约 3 帧/秒，时间轴更准确，处理时间更长。",
+      fine: "精细模式：约 4 帧/秒，时间轴更准确，处理时间更长。",
     };
-    el.startHint.textContent = descriptions[precision] || descriptions.balanced;
+    el.startHint.textContent = descriptions[precision] || descriptions.fine;
   }
 
   // ---------------------------------------------------------------- ROI
@@ -955,6 +1114,73 @@
     markPreset();
   }
 
+  function updateMinTextGuide() {
+    if (!el.minTextGuide) return;
+    if (!state.job || !state.minGuideVisible) {
+      el.minTextGuide.hidden = true;
+      return;
+    }
+    const stageH = el.videoStage.clientHeight;
+    const stageW = el.videoStage.clientWidth;
+    const probe = state.job.probe || {};
+    const videoH = Number(probe.display_height) || Number(probe.height) || 0;
+    if (!stageH || !stageW || !videoH) {
+      el.minTextGuide.hidden = true;
+      return;
+    }
+    const px = clamp(Number(el.minTextHeight.value) || 14, 2, 300);
+    const displayH = Math.max(3, stageH * px / videoH);
+    const left = stageW * state.roi.x + 8;
+    const bottom = stageH * (state.roi.y + state.roi.h);
+    const top = Math.max(2, bottom - displayH - 8);
+    el.minTextGuide.hidden = false;
+    el.minTextGuide.style.left = `${left}px`;
+    el.minTextGuide.style.top = `${top}px`;
+    el.minTextGuide.style.height = `${displayH}px`;
+    el.minTextGuideLabel.textContent = `${Math.round(px)} px`;
+    el.minTextGuide.classList.toggle("label-left", left + 150 > stageW);
+  }
+
+  function toggleMinTextGuide() {
+    if (!state.job) {
+      toast("请先打开一个任务", "error");
+      return;
+    }
+    state.minGuideVisible = !state.minGuideVisible;
+    el.minTextGuideBtn.classList.toggle("is-active", state.minGuideVisible);
+    updateMinTextGuide();
+    if (state.minGuideVisible) {
+      el.videoStage.scrollIntoView({ behavior: "smooth", block: "center" });
+      toast("拖动画面中的高度标记，或用输入框填写像素高度", "success");
+    }
+  }
+
+  function initMinTextGuideDrag() {
+    if (!el.minTextGuideHandle) return;
+    el.minTextGuideHandle.addEventListener("pointerdown", (event) => {
+      if (state.processing || !state.job) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const stageH = el.videoStage.clientHeight;
+      const videoH = Number((state.job.probe || {}).display_height) || Number((state.job.probe || {}).height) || 0;
+      if (!stageH || !videoH) return;
+      const startY = event.clientY;
+      const startHeight = clamp(Number(el.minTextHeight.value) || 14, 2, 300);
+      const scale = stageH / videoH;
+      const move = (moveEvent) => {
+        const px = clamp(startHeight + (startY - moveEvent.clientY) / scale, 2, 300);
+        el.minTextHeight.value = String(Math.round(px));
+        updateMinTextGuide();
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up, { once: true });
+    });
+  }
+
   function drawRoi() {
     const { x, y, w, h } = state.roi;
     el.roi.style.left = `${x * 100}%`;
@@ -964,6 +1190,7 @@
     const tag = $(".roi-tag", el.roi);
     if (tag) tag.textContent = `字幕区域 · ${Math.round(h * 100)}%`;
     updateRoiDisplay();
+    updateMinTextGuide();
   }
 
   function markPreset() {
@@ -1136,6 +1363,9 @@
 
     el.autoRegion.addEventListener("click", autoDetectRegion);
 
+    el.minTextGuideBtn.addEventListener("click", toggleMinTextGuide);
+    initMinTextGuideDrag();
+    window.addEventListener("resize", updateMinTextGuide);
     el.roiLocate.addEventListener("click", () => {
       el.videoStage.scrollIntoView({ behavior: "smooth", block: "center" });
       el.roi.classList.remove("is-flash");
@@ -1630,13 +1860,28 @@
     if (wasNearBottom) el.partialList.scrollTop = el.partialList.scrollHeight;
   }
 
+  function updateAssDownloadLink() {
+    if (!state.job) return;
+    const params = new URLSearchParams({
+      font_name: el.fontName.value || "Kaiti SC",
+      font_size: String(Number(el.fontSize.value) || 70),
+      border_width: String(Number(el.borderWidth.value) || 2),
+    });
+    el.downloadAss.href = `/api/jobs/${state.job.id}/download/ass?${params.toString()}`;
+  }
+
+  function switchExtractPanel(_panel) {
+    // Settings now live below the player; the right panel only contains results.
+  }
+
   function renderResults() {
     const job = state.job;
     if (!job) return;
     el.resultsCard.hidden = false;
     el.resultCount.textContent = `共 ${state.cues.length} 条`;
+    switchExtractPanel("results");
     el.downloadSrt.href = `/api/jobs/${job.id}/download/srt`;
-    el.downloadAss.href = `/api/jobs/${job.id}/download/ass`;
+    updateAssDownloadLink();
     el.saveBtn.disabled = false;
     el.saveState.textContent = "";
     el.saveState.classList.remove("is-dirty");
@@ -3182,20 +3427,20 @@
     }
     const cue = syncState.cues.find((item) => item.id === syncState.selectedId);
     if (!cue) return;
-    if (!el.syncVideo.src) {
-      toast("请先选择纯净视频", "error");
-      return;
-    }
-    const target = Number(el.syncVideo.currentTime) || 0;
-    const currentMapped = mapSyncTime(cue.start);
-    const delta = target - currentMapped;
-    if (Math.abs(delta) < 0.005) {
-      toast("当前位置没有产生偏移；把视频拖到目标位置后再记录", "error");
-      return;
+    const hasVideo = !!el.syncVideo.src;
+    let delta = 0;
+    if (hasVideo) {
+      const target = Number(el.syncVideo.currentTime) || 0;
+      const currentMapped = mapSyncTime(cue.start);
+      delta = target - currentMapped;
+      if (Math.abs(delta) < 0.005) {
+        toast("当前位置没有产生偏移；把视频拖到目标位置后再记录", "error");
+        return;
+      }
     }
     const existing = syncState.anchors.find((item) => Math.abs(item.source - cue.start) < 0.002);
     if (existing) {
-      existing.delta = (Number(existing.delta) || 0) + delta;
+      if (hasVideo) existing.delta = (Number(existing.delta) || 0) + delta;
       existing.text = cue.text;
     } else {
       syncState.anchors.push({ cueId: cue.id, source: cue.start, delta, endDelta: 0, text: cue.text });
@@ -3204,7 +3449,9 @@
     renderSyncAnchors();
     renderSyncCueList();
     updateSyncOverlay();
-    toast(`从这条字幕起偏移 ${delta >= 0 ? "+" : ""}${delta.toFixed(2)}s，后续字幕同步移动`, "success");
+    toast(hasVideo
+      ? `从这条字幕起偏移 ${delta >= 0 ? "+" : ""}${delta.toFixed(2)}s，后续字幕同步移动`
+      : "已添加偏移点，请在右侧「起」输入框填写提前或延后秒数", "success");
   }
 
   function seekSyncTo(seconds) {
@@ -3225,35 +3472,37 @@
       toast("先在字幕预览中选中一条字幕", "error");
       return;
     }
-    if (!el.syncVideo.src) {
-      toast("请先选择纯净视频", "error");
-      return;
-    }
+    const hasVideo = !!el.syncVideo.src;
     const adjusted = adjustedSyncCues();
     const selected = adjusted.find((item) => item.id === syncState.selectedId);
     if (!selected) return;
-    const target = Number(el.syncVideo.currentTime) || 0;
-    if (target <= selected.adjustedStart + 0.04) {
-      toast("结束时间必须晚于开始时间", "error");
-      return;
-    }
-    const delta = target - selected.adjustedEnd;
-    if (Math.abs(delta) < 0.005) {
-      toast("当前位置没有产生结束时间偏移", "error");
-      return;
+    let delta = 0;
+    if (hasVideo) {
+      const target = Number(el.syncVideo.currentTime) || 0;
+      if (target <= selected.adjustedStart + 0.04) {
+        toast("结束时间必须晚于开始时间", "error");
+        return;
+      }
+      delta = target - selected.adjustedEnd;
+      if (Math.abs(delta) < 0.005) {
+        toast("当前位置没有产生结束时间偏移", "error");
+        return;
+      }
     }
     let point = syncState.anchors.find((item) => Math.abs(item.source - selected.start) < 0.002);
     if (!point) {
       point = { cueId: selected.id, source: selected.start, delta: 0, endDelta: 0, text: selected.text };
       syncState.anchors.push(point);
     }
-    point.endDelta = (Number(point.endDelta) || 0) + delta;
+    if (hasVideo) point.endDelta = (Number(point.endDelta) || 0) + delta;
     point.text = selected.text;
     syncState.anchors.sort((a, b) => a.source - b.source);
     renderSyncAnchors();
     renderSyncCueList();
     updateSyncOverlay();
-    toast(`这条字幕的结束时间偏移 ${delta >= 0 ? "+" : ""}${delta.toFixed(2)}s`, "success");
+    toast(hasVideo
+      ? `这条字幕的结束时间偏移 ${delta >= 0 ? "+" : ""}${delta.toFixed(2)}s`
+      : "已添加终点偏移点，请在右侧「尾」输入框填写秒数", "success");
   }
 
   function seekSyncBy(delta) {
@@ -3374,7 +3623,7 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Heiti SC,48,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,30,30,42,1
+Style: Default,Kaiti SC,48,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,30,30,42,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -3426,7 +3675,23 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
   function initSync() {
     el.tabExtract.addEventListener("click", () => switchAppTab("extract"));
+    el.extractNewTask.addEventListener("click", () => {
+      if (state.dirty && !window.confirm("有未保存的字幕修改，确定新建任务吗？")) return;
+      showLanding();
+    });
     el.tabSync.addEventListener("click", () => switchAppTab("sync"));
+    el.syncNewTask.addEventListener("click", () => clearSyncTask());
+    el.syncDeleteSelected.addEventListener("click", deleteSelectedSyncTasks);
+    el.syncRunSelected.addEventListener("click", exportSelectedSyncTasks);
+    el.syncSelectAll.addEventListener("change", () => {
+      selectedSyncTasks.clear();
+      if (el.syncSelectAll.checked) {
+        el.syncTaskList.querySelectorAll(".task-rail-item").forEach((item) => {
+          if (item.dataset.taskId) selectedSyncTasks.add(item.dataset.taskId);
+        });
+      }
+      refreshSyncTasks();
+    });
     el.syncVideoInput.addEventListener("change", () => {
       const file = el.syncVideoInput.files && el.syncVideoInput.files[0];
       if (!file) return;
@@ -3452,6 +3717,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       }
       updateSyncAutoButton();
       resetSyncAutoStatus();
+      refreshSyncTasks();
       toast("纯净视频已载入", "success");
     });
     el.syncSubInput.addEventListener("change", async () => {
@@ -3475,6 +3741,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         renderSyncCueList();
         updateSyncOverlay();
         resetSyncAutoStatus();
+        refreshSyncTasks();
         toast(`已载入 ${cues.length} 条字幕`, "success");
       } catch (error) {
         toast(error.message || "字幕文件解析失败", "error");
@@ -3599,16 +3866,23 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         if (data.stage === "done") {
           const result = data.result || {};
           setMuxProgress(100, "封装完成");
-          el.muxStatus.textContent = `封装完成：${result.filename || "output.mkv"} · ${(Number(result.size) / 1024 / 1024).toFixed(1)} MB`;
+          const muxSummary = `封装完成：${result.filename || "output.mkv"} · ${(Number(result.size) / 1024 / 1024).toFixed(1)} MB`;
+          el.muxStatus.textContent = result.saved_path
+            ? `${muxSummary}
+已自动保存到：${result.saved_path}`
+            : `${muxSummary}
+自动保存失败，请点击下方按钮下载。`;
           muxState.outputUrl = result.url;
           el.muxDownload.href = result.url;
           el.muxDownload.download = result.filename || "output.mkv";
+          el.muxDownload.textContent = result.saved_path ? "再次下载 MKV" : "下载封装后的 MKV";
           el.muxDownload.hidden = false;
           el.muxStartBtn.disabled = false;
           el.muxStartBtn.textContent = "开始封装";
           muxState.pollTimer = null;
           muxState.pollToken = null;
-          toast("MKV 封装完成", "success");
+          toast(result.saved_path ? "MKV 已封装并保存到 Downloads" : "MKV 封装完成", "success");
+          refreshMuxTasks();
           return;
         }
         if (data.stage === "error") {
@@ -3648,7 +3922,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     form.append("video", muxState.videoFile, muxState.videoFile.name);
     form.append("subtitle", muxState.subtitleFile, muxState.subtitleFile.name);
     form.append("language", el.muxLanguage.value);
-    form.append("title", el.muxTitle.value.trim());
+    form.append("title", el.muxTitle.value.trim() || muxLanguageTitle());
+    form.append("offset", el.muxOffset.value || "0");
+    form.append("output_name", el.muxOutputName.value.trim());
     form.append("default", el.muxDefault.checked ? "1" : "0");
     el.muxStartBtn.disabled = true;
     el.muxStartBtn.textContent = "正在上传…";
@@ -3687,6 +3963,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         toast((data && data.error) || "封装失败", "error");
         return;
       }
+      const startedDraft = muxDrafts.findIndex((item) => item.id === muxState.draftId);
+      if (startedDraft >= 0) muxDrafts.splice(startedDraft, 1);
+      muxState.draftId = null;
       muxState.pollToken = data.token;
       el.muxStartBtn.textContent = "正在封装…";
       setMuxProgress(0, "准备封装…");
@@ -3752,16 +4031,23 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         if (data.stage === "done") {
           const result = data.result || {};
           setCutProgress(100, "切割完成");
-          el.cutStatus.textContent = `切割完成：${result.filename || "output_cut.mkv"} · ${(Number(result.size) / 1024 / 1024).toFixed(1)} MB`;
+          const cutSummary = `切割完成：${result.filename || "output_cut.mkv"} · ${(Number(result.size) / 1024 / 1024).toFixed(1)} MB`;
+          el.cutStatus.textContent = result.saved_path
+            ? `${cutSummary}
+已自动保存到：${result.saved_path}`
+            : `${cutSummary}
+自动保存失败，请点击下方按钮下载。`;
           cutState.outputUrl = result.url;
           el.cutDownload.href = result.url;
           el.cutDownload.download = result.filename || "output_cut.mkv";
+          el.cutDownload.textContent = result.saved_path ? "再次下载 MKV" : "下载切割后的 MKV";
           el.cutDownload.hidden = false;
           el.cutStartBtn.disabled = false;
           el.cutStartBtn.textContent = "开始切割";
           cutState.pollTimer = null;
           cutState.pollToken = null;
-          toast("视频切割完成", "success");
+          toast(result.saved_path ? "视频已切割并保存到 Downloads" : "视频切割完成", "success");
+          refreshCutTasks();
           return;
         }
         if (data.stage === "error") {
@@ -3851,6 +4137,121 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     xhr.send(form);
   }
 
+  function upsertCutDraft() {
+    if (!cutState.videoFile) return;
+    let task = cutDrafts.find((item) => item.id === cutState.draftId);
+    if (!task) {
+      const duplicate = cutDrafts.find((item) =>
+        item.videoFile && item.videoFile.name === cutState.videoFile.name
+        && item.videoFile.size === cutState.videoFile.size
+        && item.start === el.cutStart.value && item.end === el.cutEnd.value
+        && item.mode === el.cutMode.value
+      );
+      if (duplicate) {
+        cutState.draftId = duplicate.id;
+        task = duplicate;
+      } else {
+        cutDraftSeq += 1;
+        cutState.draftId = `cut-draft-${cutDraftSeq}`;
+        task = { id: cutState.draftId, status: "draft", created: Date.now() };
+        cutDrafts.unshift(task);
+      }
+    }
+    task.name = cutState.videoFile.name;
+    task.videoFile = cutState.videoFile;
+    task.start = el.cutStart.value;
+    task.end = el.cutEnd.value;
+    task.mode = el.cutMode.value;
+    task.duration = cutState.duration;
+    refreshCutTasks();
+  }
+
+  function loadCutDraft(task) {
+    if (!task || !task.videoFile) return;
+    if (cutState.objectUrl) URL.revokeObjectURL(cutState.objectUrl);
+    cutState.draftId = task.id;
+    cutState.videoFile = task.videoFile;
+    cutState.objectUrl = URL.createObjectURL(task.videoFile);
+    el.cutVideo.src = cutState.objectUrl;
+    el.cutVideo.load();
+    el.cutEmpty.hidden = true;
+    el.cutVideoName.textContent = task.videoFile.name;
+    el.cutStart.value = task.start || "00:00:00.000";
+    el.cutEnd.value = task.end || "00:00:00.000";
+    el.cutMode.value = task.mode || "copy";
+    cutState.duration = Number(task.duration) || 0;
+    el.cutDownload.hidden = true;
+    el.cutProgress.hidden = true;
+    updateCutSummary();
+    refreshCutTasks();
+  }
+
+  function updateCutSelection() {
+    const count = selectedCutTasks.size;
+    const draftCount = cutDrafts.filter((task) => selectedCutTasks.has(task.id)).length;
+    el.cutRunSelected.disabled = draftCount === 0 || cutBatchBusy;
+    el.cutDeleteSelected.disabled = count === 0 || cutBatchBusy;
+    el.cutRunSelected.textContent = draftCount ? `执行选中 (${draftCount})` : "执行选中";
+    el.cutDeleteSelected.textContent = count ? `删除选中 (${count})` : "删除选中";
+    const total = el.cutTaskList.querySelectorAll(".task-check").length;
+    el.cutSelectAll.checked = total > 0 && count === total;
+    el.cutSelectAll.indeterminate = count > 0 && count < total;
+  }
+
+  async function deleteSelectedCutTasks() {
+    const ids = [...selectedCutTasks];
+    if (!ids.length) return;
+    if (!window.confirm(`删除选中的 ${ids.length} 个视频切割任务？`)) return;
+    cutBatchBusy = true;
+    for (const id of ids) {
+      if (String(id).startsWith("cut-draft-")) {
+        const index = cutDrafts.findIndex((task) => task.id === id);
+        if (index >= 0) cutDrafts.splice(index, 1);
+      } else {
+        try { await api(`/api/cut/tasks/${id}`, { method: "DELETE" }); } catch (_) {}
+      }
+    }
+    if (ids.includes(cutState.draftId)) clearCutTask();
+    selectedCutTasks.clear();
+    cutBatchBusy = false;
+    refreshCutTasks();
+    toast("已删除选中任务", "success");
+  }
+
+  async function runSelectedCutTasks() {
+    if (cutBatchBusy) return;
+    const drafts = cutDrafts.filter((task) => selectedCutTasks.has(task.id));
+    if (!drafts.length) {
+      toast("请选择待切割任务；已完成任务不能直接重跑", "error");
+      return;
+    }
+    cutBatchBusy = true;
+    updateCutSelection();
+    let submitted = 0;
+    for (const task of drafts) {
+      const start = parseCueTime(task.start);
+      const end = parseCueTime(task.end);
+      if (start == null || end == null || end <= start) continue;
+      const form = new FormData();
+      form.append("video", task.videoFile, task.videoFile.name);
+      form.append("start", String(start));
+      form.append("end", String(end));
+      form.append("mode", task.mode || "copy");
+      try {
+        const response = await fetch("/api/cut", { method: "POST", body: form });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data || !data.token) throw new Error("提交失败");
+        const index = cutDrafts.findIndex((item) => item.id === task.id);
+        if (index >= 0) cutDrafts.splice(index, 1);
+        submitted += 1;
+      } catch (_) {}
+    }
+    selectedCutTasks.clear();
+    cutBatchBusy = false;
+    refreshCutTasks();
+    toast(submitted ? `已提交 ${submitted} 个切割任务` : "任务提交失败", submitted ? "success" : "error");
+  }
+
   function initCut() {
     el.cutVideoInput.addEventListener("change", () => {
       const file = el.cutVideoInput.files && el.cutVideoInput.files[0];
@@ -3876,41 +4277,193 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       el.cutStart.value = fmtCueTime(0);
       el.cutEnd.value = fmtCueTime(cutState.duration);
       updateCutSummary();
+      upsertCutDraft();
     });
     el.cutStartNow.addEventListener("click", () => {
       el.cutStart.value = fmtCueTime(el.cutVideo.currentTime || 0);
       resetCutOutput();
       updateCutSummary();
+      upsertCutDraft();
     });
     el.cutEndNow.addEventListener("click", () => {
       el.cutEnd.value = fmtCueTime(el.cutVideo.currentTime || 0);
       resetCutOutput();
       updateCutSummary();
+      upsertCutDraft();
     });
     el.cutReset.addEventListener("click", () => {
       el.cutStart.value = fmtCueTime(0);
       el.cutEnd.value = fmtCueTime(cutState.duration || 0);
       resetCutOutput();
       updateCutSummary();
+      upsertCutDraft();
     });
     [el.cutStart, el.cutEnd].forEach((input) => {
-      input.addEventListener("input", () => { resetCutOutput(); updateCutSummary(); });
+      input.addEventListener("input", () => { resetCutOutput(); updateCutSummary(); upsertCutDraft(); });
     });
     $$('[data-cut-skip]').forEach((button) => {
       button.addEventListener("click", () => seekCutBy(Number(button.dataset.cutSkip)));
     });
+    el.cutModeNote.textContent = "快速模式复制所有流，速度很快，但从最近关键帧开始，可能保留 1–2 秒广告；内封字幕保持原时间关系。需要精确切割时再切换精确模式。";
     el.cutMode.addEventListener("change", () => {
       el.cutModeNote.textContent = el.cutMode.value === "precise"
         ? "精确模式会重新编码视频、音频和文字字幕，切割点准确，字幕时间会同步调整；长视频需要一些时间。"
         : "快速模式复制所有流，速度很快，但从最近关键帧开始，可能保留 1–2 秒广告；内封字幕保持原时间关系。";
       resetCutOutput();
+      upsertCutDraft();
+    });
+    el.cutNewTask.addEventListener("click", clearCutTask);
+    el.cutDeleteSelected.addEventListener("click", deleteSelectedCutTasks);
+    el.cutRunSelected.addEventListener("click", runSelectedCutTasks);
+    el.cutSelectAll.addEventListener("change", () => {
+      selectedCutTasks.clear();
+      if (el.cutSelectAll.checked) {
+        el.cutTaskList.querySelectorAll(".task-rail-item").forEach((item) => {
+          if (item.dataset.taskId) selectedCutTasks.add(item.dataset.taskId);
+        });
+      }
+      refreshCutTasks();
     });
     el.cutStartBtn.addEventListener("click", startCut);
     el.tabCut.addEventListener("click", () => switchAppTab("cut"));
     updateCutSummary();
   }
 
+  function muxLanguageTitle() {
+    const option = el.muxLanguage.selectedOptions[0];
+    return (option && (option.dataset.title || option.textContent.trim())) || "中文";
+  }
+
+  function muxDraftSettings() {
+    return {
+      language: el.muxLanguage.value,
+      title: el.muxTitle.value.trim(),
+      offset: el.muxOffset.value || "0",
+      outputName: el.muxOutputName.value.trim(),
+      default: el.muxDefault.checked,
+    };
+  }
+
+  function upsertMuxDraft() {
+    if (!muxState.videoFile && !muxState.subtitleFile) return;
+    let task = muxDrafts.find((item) => item.id === muxState.draftId);
+    if (!task && muxState.videoFile && muxState.subtitleFile) {
+      task = muxDrafts.find((item) =>
+        item.videoFile && item.subtitleFile
+        && item.videoFile.name === muxState.videoFile.name
+        && item.videoFile.size === muxState.videoFile.size
+        && item.subtitleFile.name === muxState.subtitleFile.name
+        && item.subtitleFile.size === muxState.subtitleFile.size
+      );
+      if (task) muxState.draftId = task.id;
+    }
+    if (!task) {
+      muxDraftSeq += 1;
+      muxState.draftId = `mux-draft-${muxDraftSeq}`;
+      task = { id: muxState.draftId, status: "draft", created: Date.now() };
+      muxDrafts.unshift(task);
+    }
+    task.name = (muxState.videoFile && muxState.videoFile.name)
+      || (muxState.subtitleFile && muxState.subtitleFile.name)
+      || "字幕内封任务";
+    task.videoFile = muxState.videoFile;
+    task.subtitleFile = muxState.subtitleFile;
+    task.settings = muxDraftSettings();
+    task.updated = Date.now();
+    refreshMuxTasks();
+  }
+
+  async function loadMuxDraft(task) {
+    if (!task) return;
+    if (muxState.objectUrl) URL.revokeObjectURL(muxState.objectUrl);
+    muxState.draftId = task.id;
+    muxState.videoFile = task.videoFile || null;
+    muxState.subtitleFile = task.subtitleFile || null;
+    muxState.cues = [];
+    muxState.objectUrl = null;
+    muxState.pollToken = null;
+    if (task.settings) {
+      el.muxLanguage.value = task.settings.language || "chi";
+      el.muxTitle.value = task.settings.title || muxLanguageTitle();
+      el.muxOffset.value = task.settings.offset || "0";
+      el.muxOutputName.value = task.settings.outputName || "";
+      el.muxDefault.checked = task.settings.default !== false;
+      muxState.titleAuto = false;
+      muxState.outputNameAuto = false;
+    }
+    el.muxVideoName.textContent = task.videoFile ? task.videoFile.name : "未选择视频";
+    el.muxSubName.textContent = task.subtitleFile ? task.subtitleFile.name : "未选择字幕";
+    el.muxVideoInput.value = "";
+    el.muxSubInput.value = "";
+    el.muxDownload.hidden = true;
+    el.muxProgress.hidden = true;
+    el.muxOverlay.textContent = "";
+    if (task.videoFile) {
+      muxState.objectUrl = URL.createObjectURL(task.videoFile);
+      el.muxVideo.src = muxState.objectUrl;
+      el.muxVideo.load();
+      el.muxEmpty.hidden = true;
+    } else {
+      el.muxVideo.removeAttribute("src");
+      el.muxVideo.load();
+      el.muxEmpty.hidden = false;
+    }
+    if (task.subtitleFile) {
+      try {
+        const text = await readSubtitleFile(task.subtitleFile);
+        muxState.cues = parseSubtitleText(text, task.subtitleFile.name);
+        updateMuxOverlay();
+      } catch (_) {
+        muxState.cues = [];
+        el.muxOverlay.textContent = "";
+      }
+    }
+    updateMuxSummary();
+    el.muxStatus.textContent = muxState.videoFile && muxState.subtitleFile
+      ? "任务已载入，可以开始封装。"
+      : "继续选择视频或字幕。";
+    el.muxStartBtn.disabled = !muxState.videoFile || !muxState.subtitleFile;
+    refreshMuxTasks();
+  }
+
   function initMux() {
+    el.muxNewTask.addEventListener("click", clearMuxTask);
+    el.muxDeleteSelected.addEventListener("click", deleteSelectedMuxTasks);
+    el.muxRunSelected.addEventListener("click", runSelectedMuxTasks);
+    el.muxSelectAll.addEventListener("change", () => {
+      selectedMuxTasks.clear();
+      if (el.muxSelectAll.checked) {
+        el.muxTaskList.querySelectorAll(".task-rail-item").forEach((item) => {
+          if (item.dataset.taskId && item.querySelector(".task-check")) selectedMuxTasks.add(item.dataset.taskId);
+        });
+      }
+      refreshMuxTasks();
+    });
+    el.muxTitle.value = muxLanguageTitle();
+    el.muxLanguage.addEventListener("change", () => {
+      if (muxState.titleAuto) el.muxTitle.value = muxLanguageTitle();
+      resetMuxOutput();
+    });
+    el.muxTitle.addEventListener("input", () => {
+      muxState.titleAuto = !el.muxTitle.value.trim();
+    });
+    el.muxOutputName.addEventListener("input", () => {
+      muxState.outputNameAuto = !el.muxOutputName.value.trim();
+    });
+    el.muxOffset.addEventListener("input", () => { resetMuxOutput(); upsertMuxDraft(); });
+    [el.muxLanguage, el.muxTitle, el.muxOutputName, el.muxDefault].forEach((node) => {
+      node.addEventListener("change", upsertMuxDraft);
+      node.addEventListener("input", upsertMuxDraft);
+    });
+    $$('[data-mux-offset]').forEach((button) => {
+      button.addEventListener("click", () => {
+        const current = Number(el.muxOffset.value) || 0;
+        const delta = Number(button.dataset.muxOffset) || 0;
+        el.muxOffset.value = Math.max(-3600, Math.min(3600, current + delta)).toFixed(1);
+        resetMuxOutput();
+        upsertMuxDraft();
+      });
+    });
     el.muxVideoInput.addEventListener("change", () => {
       const file = el.muxVideoInput.files && el.muxVideoInput.files[0];
       if (!file) return;
@@ -3922,8 +4475,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       el.muxEmpty.hidden = true;
       el.muxVideoName.textContent = file.name;
       el.muxVideoInput.value = "";
+      const stem = file.name.replace(/\.[^.]+$/, "");
+      el.muxOutputName.value = `${stem}.mkv`;
+      muxState.outputNameAuto = true;
       updateMuxSummary();
       resetMuxOutput();
+      upsertMuxDraft();
       toast("纯净视频已载入", "success");
     });
     el.muxSubInput.addEventListener("change", async () => {
@@ -3944,6 +4501,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       }
       updateMuxSummary();
       resetMuxOutput();
+      upsertMuxDraft();
     });
     el.muxStartBtn.addEventListener("click", muxVideo);
     el.muxVideo.addEventListener("timeupdate", updateMuxOverlay);
@@ -3954,19 +4512,189 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     resetMuxOutput();
   }
 
+  function initTranslate() {
+    el.translateNewTask.addEventListener("click", clearTranslateTask);
+    el.translateDeleteSelected.addEventListener("click", deleteSelectedTranslateTasks);
+    el.translateRunSelected.addEventListener("click", runSelectedTranslateTasks);
+    el.translateSelectAll.addEventListener("change", () => {
+      selectedTranslateTasks.clear();
+      if (el.translateSelectAll.checked) {
+        el.translateTaskList.querySelectorAll(".task-rail-item").forEach((item) => {
+          if (item.dataset.taskId) selectedTranslateTasks.add(item.dataset.taskId);
+        });
+      }
+      refreshTranslateTasks();
+    });
+    [el.translateSource, el.translateTarget, el.translateBilingual].forEach((node) => {
+      node.addEventListener("change", upsertTranslateDraft);
+    });
+    el.tabTranslate.addEventListener("click", () => switchAppTab("translate"));
+    const choose = (file) => {
+      if (!file) return;
+      const suffix = (file.name.split(".").pop() || "").toLowerCase();
+      if (!["srt", "ass", "ssa"].includes(suffix)) {
+        toast("只支持 SRT、ASS 或 SSA 字幕文件", "error");
+        return;
+      }
+      if (file.size > 8 * 1024 * 1024) {
+        toast("字幕文件不能超过 8 MB", "error");
+        return;
+      }
+      state.translateFile = file;
+      el.translateFileName.textContent = file.name;
+      el.translateOutputFormat.textContent = suffix.toUpperCase();
+      el.translateStartBtn.disabled = false;
+      el.translateStatus.textContent = "准备翻译，选择语言后开始。";
+      el.translateDownload.hidden = true;
+      el.translatePreview.innerHTML = '<p class="translate-empty">翻译完成后会在这里显示前几条结果。</p>';
+      el.translatePreviewCount.textContent = "0 条";
+      upsertTranslateDraft();
+    };
+    el.translateFileInput.addEventListener("change", () => choose(el.translateFileInput.files[0]));
+    ["dragenter", "dragover"].forEach((name) => el.translateDrop.addEventListener(name, (event) => {
+      event.preventDefault();
+      el.translateDrop.classList.add("is-dragging");
+    }));
+    ["dragleave", "drop"].forEach((name) => el.translateDrop.addEventListener(name, (event) => {
+      event.preventDefault();
+      el.translateDrop.classList.remove("is-dragging");
+    }));
+    el.translateDrop.addEventListener("drop", (event) => {
+      const file = event.dataTransfer.files && event.dataTransfer.files[0];
+      if (file) choose(file);
+    });
+    el.translateStartBtn.addEventListener("click", startTranslation);
+    el.translateDownload.addEventListener("click", () => {
+      if (state.translateTimer) clearInterval(state.translateTimer);
+      state.translateTimer = null;
+    });
+  }
+
+  async function startTranslation() {
+    if (!state.translateFile) {
+      toast("请先选择字幕文件", "error");
+      return;
+    }
+    if (el.translateStartBtn.disabled) return;
+    const form = new FormData();
+    form.append("subtitle", state.translateFile, state.translateFile.name);
+    form.append("source", el.translateSource.value);
+    form.append("target", el.translateTarget.value);
+    form.append("bilingual", el.translateBilingual.checked ? "1" : "0");
+    el.translateStartBtn.disabled = true;
+    el.translateStartBtn.querySelector("span").textContent = "翻译中…";
+    el.translateProgress.hidden = false;
+    el.translateProgressBar.style.width = "2%";
+    el.translateProgressPct.textContent = "0%";
+    el.translateProgressLabel.textContent = "上传字幕…";
+    el.translateStatus.textContent = "正在上传字幕…";
+    el.translateDownload.hidden = true;
+    try {
+      const response = await fetch("/api/translate", { method: "POST", body: form });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error((data && data.error) || "无法开始翻译");
+      const draftIndex = translateDrafts.findIndex((item) => item.id === state.translateDraftId);
+      if (draftIndex >= 0) translateDrafts.splice(draftIndex, 1);
+      state.translateDraftId = null;
+      state.translateToken = data.token;
+      pollTranslation(data.token);
+    } catch (error) {
+      toast(error.message || "翻译失败", "error");
+      resetTranslateButton();
+      el.translateStatus.textContent = error.message || "翻译失败";
+    }
+  }
+
+  function pollTranslation(token) {
+    if (state.translateTimer) clearInterval(state.translateTimer);
+    const tick = async () => {
+      try {
+        const data = await api(`/api/translate/${token}`);
+        const pct = Math.round((Number(data.progress) || 0) * 100);
+        el.translateProgressBar.style.width = `${pct}%`;
+        el.translateProgressPct.textContent = `${pct}%`;
+        el.translateProgressLabel.textContent = data.message || "翻译中…";
+        el.translateStatus.textContent = data.message || "翻译中…";
+        if (data.status === "done") {
+          clearInterval(state.translateTimer);
+          state.translateTimer = null;
+          el.translateProgressBar.style.width = "100%";
+          el.translateProgressPct.textContent = "100%";
+          el.translatePreviewCount.textContent = `${data.entries} 条`;
+          renderTranslationPreview(data.preview || []);
+          el.translateDownload.href = data.download;
+          el.translateDownload.hidden = false;
+          el.translateDownload.textContent = "下载翻译字幕";
+          el.translateStatus.textContent = "翻译完成。时间轴和格式已保留。";
+          resetTranslateButton();
+          refreshTranslateTasks();
+        } else if (data.status === "error") {
+          clearInterval(state.translateTimer);
+          state.translateTimer = null;
+          toast(data.error || "翻译失败", "error");
+          el.translateStatus.textContent = data.error || "翻译失败";
+          resetTranslateButton();
+        }
+      } catch (error) {
+        clearInterval(state.translateTimer);
+        state.translateTimer = null;
+        toast(error.message || "无法获取翻译进度", "error");
+        el.translateStatus.textContent = error.message || "无法获取翻译进度";
+        resetTranslateButton();
+      }
+    };
+    tick();
+    state.translateTimer = setInterval(tick, 900);
+  }
+
+  function renderTranslationPreview(items) {
+    el.translatePreview.innerHTML = "";
+    if (!items.length) {
+      el.translatePreview.innerHTML = '<p class="translate-empty">没有可显示的结果。</p>';
+      return;
+    }
+    items.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "translate-preview-row";
+      const time = document.createElement("span");
+      time.className = "translate-preview-time";
+      time.textContent = item.time || "";
+      const body = document.createElement("div");
+      body.className = "translate-preview-body";
+      const source = document.createElement("p");
+      source.className = "translate-preview-source";
+      source.textContent = item.source || "";
+      const target = document.createElement("p");
+      target.className = "translate-preview-target";
+      target.textContent = item.target || "";
+      body.append(source, target);
+      row.append(time, body);
+      el.translatePreview.append(row);
+    });
+  }
+
+  function resetTranslateButton() {
+    el.translateStartBtn.disabled = !state.translateFile;
+    el.translateStartBtn.querySelector("span").textContent = "开始翻译";
+  }
+
   function switchAppTab(tab) {
     const sync = tab === "sync";
     const mux = tab === "mux";
     const cut = tab === "cut";
-    el.tabExtract.classList.toggle("is-active", !sync && !mux && !cut);
+    const translate = tab === "translate";
+    el.tabExtract.classList.toggle("is-active", !sync && !mux && !cut && !translate);
     el.tabSync.classList.toggle("is-active", sync);
     el.tabMux.classList.toggle("is-active", mux);
     el.tabCut.classList.toggle("is-active", cut);
+    el.tabTranslate.classList.toggle("is-active", translate);
     el.syncView.hidden = !sync;
     el.muxView.hidden = !mux;
     el.cutView.hidden = !cut;
-    el.landing.hidden = sync || mux || cut || !!state.job;
-    el.workspace.hidden = sync || mux || cut || !state.job;
+    el.translateView.hidden = !translate;
+    refreshTaskRails();
+    el.landing.hidden = true;
+    el.workspace.hidden = sync || mux || cut || translate;
     if (sync) {
       el.video.pause();
       el.muxVideo.pause();
@@ -3983,6 +4711,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       el.syncVideo.pause();
       el.muxVideo.pause();
       window.scrollTo({ top: 0, behavior: "auto" });
+    } else if (translate) {
+      el.video.pause();
+      el.syncVideo.pause();
+      el.muxVideo.pause();
+      el.cutVideo.pause();
+      window.scrollTo({ top: 0, behavior: "auto" });
     } else {
       el.syncVideo.pause();
       el.muxVideo.pause();
@@ -3991,6 +4725,758 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   }
 
   // ---------------------------------------------------------------- misc events
+  const TASK_STATUS_LABELS = {
+    ready: "待识别", processing: "识别中", done: "已完成", error: "失败", cancelled: "已取消",
+    queued: "排队中", muxing: "封装中", cutting: "切割中", running: "翻译中", draft: "待封装",
+  };
+
+  function renderTaskRail(container, tasks, activeToken, onSelect, options = {}) {
+    if (!container) return;
+    container.replaceChildren();
+    if (!tasks.length) {
+      const empty = document.createElement("p");
+      empty.className = "task-rail-empty";
+      empty.textContent = "暂无任务";
+      container.append(empty);
+      return;
+    }
+    tasks.forEach((task) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "task-rail-item";
+      const taskKey = task.id || task.token;
+      button.dataset.taskId = taskKey;
+      if (taskKey === activeToken) button.classList.add("is-active");
+      if (options.selectable && (!options.selectableFor || options.selectableFor(task))) {
+        const selected = options.selected && options.selected.has(taskKey);
+        if (selected) button.classList.add("is-selected");
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.className = "task-check";
+        check.checked = selected;
+        check.addEventListener("click", (event) => event.stopPropagation());
+        check.addEventListener("change", () => options.onToggle && options.onToggle(taskKey, check.checked));
+        button.append(check);
+      }
+      if (["done"].includes(task.status)) button.classList.add("is-done");
+      if (["error", "cancelled"].includes(task.status)) button.classList.add("is-error");
+      const name = document.createElement("b");
+      name.textContent = task.name || task.filename || `任务 ${String(task.id || task.token).slice(0, 6)}`;
+      const meta = document.createElement("small");
+      const status = document.createElement("span");
+      status.textContent = task.statusLabel || TASK_STATUS_LABELS[task.status] || task.status || "任务";
+      const extra = document.createElement("span");
+      const progress = Math.round((Number(task.progress) || 0) * 100);
+      extra.textContent = task.status === "done"
+        ? (task.saved_path ? "已保存" : "完成")
+        : (progress > 0 ? `${progress}%` : "");
+      meta.append(status, extra);
+      button.append(name, meta);
+      button.addEventListener("click", () => onSelect(task));
+      container.append(button);
+    });
+  }
+
+  async function refreshExtractTasks() {
+    if (el.workspace.hidden) return;
+    try {
+      const data = await api("/api/jobs");
+      const jobs = data.jobs || [];
+      const valid = new Set(jobs.map((job) => job.id));
+      state.selectedExtractTasks.forEach((id) => { if (!valid.has(id)) state.selectedExtractTasks.delete(id); });
+      renderTaskRail(el.extractTaskList, jobs, state.job && state.job.id, (task) => {
+        if (state.dirty && !window.confirm("有未保存的字幕修改，确定切换任务吗？")) return;
+        openJob(task.id);
+      }, {
+        selectable: true,
+        selected: state.selectedExtractTasks,
+        onToggle: (id, checked) => {
+          if (checked) state.selectedExtractTasks.add(id);
+          else state.selectedExtractTasks.delete(id);
+          updateExtractSelection();
+        },
+      });
+      updateExtractSelection();
+    } catch (_) {}
+  }
+
+  async function refreshMuxTasks() {
+    if (el.muxView.hidden) return;
+    try {
+      const data = await api("/api/mux/tasks");
+      const tasks = [...muxDrafts, ...(data.tasks || [])];
+      const valid = new Set(tasks.map((task) => task.id || task.token));
+      selectedMuxTasks.forEach((id) => { if (!valid.has(id)) selectedMuxTasks.delete(id); });
+      renderTaskRail(el.muxTaskList, tasks, muxState.pollToken || muxState.draftId, (task) => {
+        if (String(task.id || "").startsWith("mux-draft-")) {
+          loadMuxDraft(task);
+          return;
+        }
+        muxState.pollToken = task.token;
+        pollMuxStatus(task.token);
+      }, {
+        selectable: true,
+        selected: selectedMuxTasks,
+        onToggle: (id, checked) => {
+          if (checked) selectedMuxTasks.add(id);
+          else selectedMuxTasks.delete(id);
+          updateMuxSelection();
+        },
+      });
+      updateMuxSelection();
+    } catch (_) {}
+  }
+
+  async function refreshCutTasks() {
+    if (el.cutView.hidden) return;
+    try {
+      const data = await api("/api/cut/tasks");
+      const tasks = [...cutDrafts, ...(data.tasks || [])];
+      const valid = new Set(tasks.map((task) => task.id || task.token));
+      selectedCutTasks.forEach((id) => { if (!valid.has(id)) selectedCutTasks.delete(id); });
+      renderTaskRail(el.cutTaskList, tasks, cutState.pollToken || cutState.draftId, (task) => {
+        if (String(task.id || "").startsWith("cut-draft-")) {
+          loadCutDraft(task);
+          return;
+        }
+        cutState.pollToken = task.token;
+        pollCutStatus(task.token);
+      }, {
+        selectable: true,
+        selected: selectedCutTasks,
+        onToggle: (id, checked) => {
+          if (checked) selectedCutTasks.add(id);
+          else selectedCutTasks.delete(id);
+          updateCutSelection();
+        },
+      });
+      updateCutSelection();
+    } catch (_) {}
+  }
+
+  function translateDraftSettings() {
+    return {
+      source: el.translateSource.value,
+      target: el.translateTarget.value,
+      bilingual: el.translateBilingual.checked,
+    };
+  }
+
+  function upsertTranslateDraft() {
+    if (!state.translateFile) return;
+    let task = translateDrafts.find((item) => item.id === state.translateDraftId);
+    if (!task) {
+      const duplicate = translateDrafts.find((item) =>
+        item.subtitleFile && item.subtitleFile.name === state.translateFile.name
+        && item.subtitleFile.size === state.translateFile.size
+        && item.settings.source === el.translateSource.value
+        && item.settings.target === el.translateTarget.value
+        && item.settings.bilingual === el.translateBilingual.checked
+      );
+      if (duplicate) {
+        state.translateDraftId = duplicate.id;
+        task = duplicate;
+      } else {
+        translateDraftSeq += 1;
+        state.translateDraftId = `translate-draft-${translateDraftSeq}`;
+        task = { id: state.translateDraftId, status: "draft", created: Date.now() };
+        translateDrafts.unshift(task);
+      }
+    }
+    task.name = state.translateFile.name;
+    task.subtitleFile = state.translateFile;
+    task.settings = translateDraftSettings();
+    refreshTranslateTasks();
+  }
+
+  function loadTranslateDraft(task) {
+    if (!task) return;
+    state.translateDraftId = task.id;
+    state.translateFile = task.subtitleFile || null;
+    el.translateFileName.textContent = task.subtitleFile ? task.subtitleFile.name : "或拖到这里";
+    el.translateSource.value = (task.settings && task.settings.source) || "auto";
+    el.translateTarget.value = (task.settings && task.settings.target) || "zh-Hant";
+    el.translateBilingual.checked = !!(task.settings && task.settings.bilingual);
+    el.translateStartBtn.disabled = !state.translateFile;
+    el.translateDownload.hidden = true;
+    el.translateProgress.hidden = true;
+    refreshTranslateTasks();
+  }
+
+  function updateTranslateSelection() {
+    const count = selectedTranslateTasks.size;
+    const draftCount = translateDrafts.filter((task) => selectedTranslateTasks.has(task.id)).length;
+    el.translateRunSelected.disabled = draftCount === 0 || translateBatchBusy;
+    el.translateDeleteSelected.disabled = count === 0 || translateBatchBusy;
+    el.translateRunSelected.textContent = draftCount ? `执行选中 (${draftCount})` : "执行选中";
+    el.translateDeleteSelected.textContent = count ? `删除选中 (${count})` : "删除选中";
+    const total = el.translateTaskList.querySelectorAll(".task-check").length;
+    el.translateSelectAll.checked = total > 0 && count === total;
+    el.translateSelectAll.indeterminate = count > 0 && count < total;
+  }
+
+  async function deleteSelectedTranslateTasks() {
+    const ids = [...selectedTranslateTasks];
+    if (!ids.length) return;
+    if (!window.confirm(`删除选中的 ${ids.length} 个翻译任务？`)) return;
+    translateBatchBusy = true;
+    for (const id of ids) {
+      if (String(id).startsWith("translate-draft-")) {
+        const index = translateDrafts.findIndex((task) => task.id === id);
+        if (index >= 0) translateDrafts.splice(index, 1);
+      } else {
+        try { await api(`/api/translate/tasks/${id}`, { method: "DELETE" }); } catch (_) {}
+      }
+    }
+    if (ids.includes(state.translateDraftId)) clearTranslateTask();
+    selectedTranslateTasks.clear();
+    translateBatchBusy = false;
+    refreshTranslateTasks();
+  }
+
+  async function runSelectedTranslateTasks() {
+    if (translateBatchBusy) return;
+    const drafts = translateDrafts.filter((task) => selectedTranslateTasks.has(task.id));
+    if (!drafts.length) {
+      toast("请选择待翻译任务；已完成任务不能直接重跑", "error");
+      return;
+    }
+    translateBatchBusy = true;
+    updateTranslateSelection();
+    let submitted = 0;
+    for (const task of drafts) {
+      if (!task.subtitleFile) continue;
+      const form = new FormData();
+      form.append("subtitle", task.subtitleFile, task.subtitleFile.name);
+      form.append("source", (task.settings && task.settings.source) || "auto");
+      form.append("target", (task.settings && task.settings.target) || "zh-Hant");
+      form.append("bilingual", task.settings && task.settings.bilingual ? "1" : "0");
+      try {
+        const response = await fetch("/api/translate", { method: "POST", body: form });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data || !data.token) throw new Error("提交失败");
+        const index = translateDrafts.findIndex((item) => item.id === task.id);
+        if (index >= 0) translateDrafts.splice(index, 1);
+        submitted += 1;
+      } catch (_) {}
+    }
+    selectedTranslateTasks.clear();
+    translateBatchBusy = false;
+    refreshTranslateTasks();
+    toast(submitted ? `已提交 ${submitted} 个翻译任务` : "任务提交失败", submitted ? "success" : "error");
+  }
+
+  async function refreshTranslateTasks() {
+    if (el.translateView.hidden) return;
+    try {
+      const data = await api("/api/translate/tasks");
+      const tasks = [...translateDrafts, ...(data.tasks || [])];
+      const valid = new Set(tasks.map((task) => task.id || task.token));
+      selectedTranslateTasks.forEach((id) => { if (!valid.has(id)) selectedTranslateTasks.delete(id); });
+      renderTaskRail(el.translateTaskList, tasks, state.translateToken || state.translateDraftId, (task) => {
+        if (String(task.id || "").startsWith("translate-draft-")) {
+          loadTranslateDraft(task);
+          return;
+        }
+        state.translateToken = task.token;
+        pollTranslation(task.token);
+      }, {
+        selectable: true,
+        selected: selectedTranslateTasks,
+        onToggle: (id, checked) => {
+          if (checked) selectedTranslateTasks.add(id);
+          else selectedTranslateTasks.delete(id);
+          updateTranslateSelection();
+        },
+      });
+      updateTranslateSelection();
+    } catch (_) {}
+  }
+
+  function snapshotSyncTask() {
+    if (!syncState.videoName && !syncState.subtitleName && !syncState.cues.length) return;
+    const task = {
+      id: syncState.taskId,
+      name: syncState.videoName || syncState.subtitleName || "同步任务",
+      videoName: syncState.videoName,
+      subtitleName: syncState.subtitleName,
+      cues: syncState.cues,
+      offset: syncState.offset,
+      anchors: syncState.anchors,
+      selectedId: syncState.selectedId,
+      videoFile: syncState.videoFile,
+      videoUrl: syncState.videoUrl,
+      compatUrl: syncState.compatUrl,
+      auto: syncState.auto,
+      pendingAuto: syncState.pendingAuto,
+      status: syncState.cues.length ? "ready" : "queued",
+      statusLabel: syncState.cues.length ? "已载入" : "待载入",
+    };
+    const index = syncTasks.findIndex((item) => item.id === task.id);
+    if (index >= 0) syncTasks[index] = task;
+    else syncTasks.unshift(task);
+  }
+
+  function refreshSyncTasks() {
+    if (el.syncView.hidden) return;
+    const tasks = syncTasks.slice();
+    if (syncState.videoName || syncState.subtitleName || syncState.cues.length) {
+      const current = {
+        id: syncState.taskId,
+        name: syncState.videoName || syncState.subtitleName || "当前同步任务",
+        status: syncState.cues.length ? "ready" : "queued",
+        statusLabel: syncState.cues.length ? "已载入" : "待载入",
+      };
+      const index = tasks.findIndex((item) => item.id === current.id);
+      if (index >= 0) tasks[index] = { ...tasks[index], ...current };
+      else tasks.unshift(current);
+    }
+    const valid = new Set(tasks.map((task) => task.id));
+    selectedSyncTasks.forEach((id) => { if (!valid.has(id)) selectedSyncTasks.delete(id); });
+    renderTaskRail(el.syncTaskList, tasks, syncState.taskId, (task) => selectSyncTask(task), {
+      selectable: true,
+      selected: selectedSyncTasks,
+      onToggle: (id, checked) => {
+        if (checked) selectedSyncTasks.add(id);
+        else selectedSyncTasks.delete(id);
+        updateSyncSelection();
+      },
+    });
+    updateSyncSelection();
+  }
+
+  function updateSyncSelection() {
+    const count = selectedSyncTasks.size;
+    el.syncDeleteSelected.disabled = count === 0;
+    el.syncRunSelected.disabled = count === 0;
+    el.syncDeleteSelected.textContent = count ? `删除选中 (${count})` : "删除选中";
+    el.syncRunSelected.textContent = count ? `导出选中 (${count})` : "导出选中";
+    const total = el.syncTaskList.querySelectorAll(".task-check").length;
+    el.syncSelectAll.checked = total > 0 && count === total;
+    el.syncSelectAll.indeterminate = count > 0 && count < total;
+  }
+
+  function syncSrtForTask(task) {
+    const backup = { ...syncState };
+    if (task.id === syncState.taskId) snapshotSyncTask();
+    const stored = syncTasks.find((item) => item.id === task.id) || task;
+    Object.assign(syncState, {
+      cues: stored.cues || [],
+      offset: Number(stored.offset) || 0,
+      anchors: (stored.anchors || []).slice(),
+      auto: stored.auto || null,
+      selectedId: stored.selectedId || null,
+    });
+    const adjusted = adjustedSyncCues();
+    Object.assign(syncState, backup);
+    return adjusted;
+  }
+
+  function downloadSyncSrt(task) {
+    const cues = syncSrtForTask(task);
+    if (!cues.length) return false;
+    const blocks = cues.map((cue, index) => (
+      `${index + 1}\n${fmtCueTime(cue.adjustedStart).replace(".", ",")} --> ${fmtCueTime(cue.adjustedEnd).replace(".", ",")}\n${cue.text}\n`
+    ));
+    const blob = new Blob([blocks.join("\n")], { type: "application/x-subrip" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${(task.videoName || task.subtitleName || "subtitle").replace(/\.[^.]+$/, "")}_synced.srt`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  }
+
+  function deleteSelectedSyncTasks() {
+    const ids = [...selectedSyncTasks];
+    if (!ids.length) return;
+    if (!window.confirm(`删除选中的 ${ids.length} 个同步任务？`)) return;
+    const deletingCurrent = ids.includes(syncState.taskId);
+    for (const id of ids) {
+      const index = syncTasks.findIndex((task) => task.id === id);
+      if (index >= 0) syncTasks.splice(index, 1);
+    }
+    selectedSyncTasks.clear();
+    if (deletingCurrent) clearSyncTask(false);
+    refreshSyncTasks();
+  }
+
+  function exportSelectedSyncTasks() {
+    const tasks = syncTasks.filter((task) => selectedSyncTasks.has(task.id));
+    let count = 0;
+    tasks.forEach((task) => { if (downloadSyncSrt(task)) count += 1; });
+    toast(count ? `已导出 ${count} 个同步字幕` : "没有可导出的字幕", count ? "success" : "error");
+  }
+
+  function selectSyncTask(task) {
+    if (!task || task.id === syncState.taskId) return;
+    snapshotSyncTask();
+    syncState.taskId = task.id;
+    syncState.videoName = task.videoName || "";
+    syncState.subtitleName = task.subtitleName || "";
+    syncState.cues = task.cues || [];
+    syncState.offset = Number(task.offset) || 0;
+    syncState.anchors = (task.anchors || []).slice();
+    syncState.selectedId = task.selectedId || null;
+    syncState.videoFile = task.videoFile || null;
+    syncState.videoUrl = task.videoUrl || null;
+    syncState.compatUrl = task.compatUrl || null;
+    syncState.auto = task.auto || null;
+    syncState.pendingAuto = task.pendingAuto || null;
+    el.syncVideoName.textContent = syncState.videoName || "未选择视频";
+    el.syncSubName.textContent = syncState.subtitleName || "未选择字幕";
+    el.syncOffset.value = syncState.offset.toFixed(2);
+    el.syncEmpty.hidden = !!syncState.videoUrl;
+    if (syncState.videoUrl) {
+      el.syncVideo.src = syncState.compatUrl || syncState.videoUrl;
+      el.syncVideo.load();
+    } else {
+      el.syncVideo.removeAttribute("src");
+      el.syncVideo.load();
+    }
+    renderSyncAnchors();
+    renderSyncCueList();
+    updateSyncOverlay();
+    renderSyncAuto();
+    refreshSyncTasks();
+  }
+
+  function updateExtractSelection() {
+    const count = state.selectedExtractTasks.size;
+    el.extractRunSelected.disabled = count === 0;
+    el.extractDeleteSelected.disabled = count === 0;
+    el.extractRunSelected.textContent = count ? `执行选中 (${count})` : "执行选中";
+    el.extractDeleteSelected.textContent = count ? `删除选中 (${count})` : "删除选中";
+    const jobs = el.extractTaskList.querySelectorAll(".task-rail-item").length;
+    el.extractSelectAll.checked = jobs > 0 && count === jobs;
+    el.extractSelectAll.indeterminate = count > 0 && count < jobs;
+  }
+
+  async function runSelectedExtractions() {
+    const ids = [...state.selectedExtractTasks];
+    if (!ids.length) return;
+    el.extractRunSelected.disabled = true;
+    try {
+      const result = await api("/api/jobs/batch-start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const started = (result.started || []).length;
+      toast(`已启动 ${started} 个识别任务`, "success");
+      state.selectedExtractTasks.clear();
+      await refreshExtractTasks();
+      if (state.job && ids.includes(state.job.id)) openJob(state.job.id);
+    } catch (error) {
+      toast(error.message || "批量执行失败", "error");
+    } finally {
+      updateExtractSelection();
+    }
+  }
+
+  async function deleteSelectedExtractions() {
+    const ids = [...state.selectedExtractTasks];
+    if (!ids.length) return;
+    if (!window.confirm(`删除选中的 ${ids.length} 个任务？任务视频和本地缓存会一并删除，操作不可撤销。`)) return;
+    el.extractDeleteSelected.disabled = true;
+    const deletingCurrent = !!(state.job && ids.includes(state.job.id));
+    let deleted = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        await api(`/api/jobs/${id}`, { method: "DELETE" });
+        deleted += 1;
+      } catch (_) {
+        failed += 1;
+      }
+    }
+    state.selectedExtractTasks.clear();
+    if (deletingCurrent) showLanding();
+    await refreshExtractTasks();
+    updateExtractSelection();
+    if (failed) toast(`已删除 ${deleted} 个，${failed} 个未能删除（运行中的任务需先取消）`, "error");
+    else toast(`已删除 ${deleted} 个任务`, "success");
+  }
+
+  async function saveCurrentSettings() {
+    if (!state.job) return;
+    try {
+      const settings = readSettings();
+      await api(`/api/jobs/${state.job.id}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings }),
+      });
+      state.job.settings = settings;
+      toast("任务设置已保存", "success");
+    } catch (error) {
+      toast(error.message || "保存设置失败", "error");
+    }
+  }
+
+  function updateMuxSelection() {
+    const count = selectedMuxTasks.size;
+    const draftCount = muxDrafts.filter((task) => selectedMuxTasks.has(task.id)).length;
+    el.muxRunSelected.disabled = draftCount === 0 || muxBatchBusy;
+    el.muxDeleteSelected.disabled = count === 0 || muxBatchBusy;
+    el.muxRunSelected.textContent = draftCount ? `执行选中 (${draftCount})` : "执行选中";
+    el.muxDeleteSelected.textContent = count ? `删除选中 (${count})` : "删除选中";
+    const total = el.muxTaskList.querySelectorAll(".task-check").length;
+    el.muxSelectAll.checked = total > 0 && count === total;
+    el.muxSelectAll.indeterminate = count > 0 && count < total;
+  }
+
+  async function deleteSelectedMuxTasks() {
+    const ids = [...selectedMuxTasks];
+    if (!ids.length) return;
+    if (!window.confirm(`删除选中的 ${ids.length} 个字幕内封任务？`)) return;
+    el.muxDeleteSelected.disabled = true;
+    for (const id of ids) {
+      if (String(id).startsWith("mux-draft-")) {
+        const index = muxDrafts.findIndex((task) => task.id === id);
+        if (index >= 0) muxDrafts.splice(index, 1);
+      } else {
+        try { await api(`/api/mux/tasks/${id}`, { method: "DELETE" }); } catch (_) {}
+      }
+    }
+    if (ids.includes(muxState.draftId)) {
+      clearMuxTask();
+    }
+    selectedMuxTasks.clear();
+    refreshMuxTasks();
+    toast("已删除选中任务", "success");
+  }
+
+  async function runSelectedMuxTasks() {
+    if (muxBatchBusy) return;
+    const drafts = muxDrafts.filter((task) => selectedMuxTasks.has(task.id));
+    if (!drafts.length) {
+      toast("请选择待封装任务；已完成任务不能直接重跑", "error");
+      return;
+    }
+    muxBatchBusy = true;
+    updateMuxSelection();
+    let submitted = 0;
+    for (const task of drafts) {
+      if (!task.videoFile || !task.subtitleFile) continue;
+      const form = new FormData();
+      form.append("video", task.videoFile, task.videoFile.name);
+      form.append("subtitle", task.subtitleFile, task.subtitleFile.name);
+      form.append("language", task.settings.language || "chi");
+      form.append("title", task.settings.title || "");
+      form.append("offset", task.settings.offset || "0");
+      form.append("output_name", task.settings.outputName || "");
+      form.append("default", task.settings.default ? "1" : "0");
+      try {
+        const response = await fetch("/api/mux", { method: "POST", body: form });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data || !data.token) throw new Error((data && data.error) || "提交失败");
+        const index = muxDrafts.findIndex((item) => item.id === task.id);
+        if (index >= 0) muxDrafts.splice(index, 1);
+        submitted += 1;
+      } catch (_) {}
+    }
+    selectedMuxTasks.clear();
+    muxBatchBusy = false;
+    refreshMuxTasks();
+    toast(submitted ? `已提交 ${submitted} 个字幕内封任务` : "任务提交失败", submitted ? "success" : "error");
+  }
+
+  function refreshTaskRails() {
+    refreshExtractTasks();
+    refreshMuxTasks();
+    refreshCutTasks();
+    refreshTranslateTasks();
+    refreshSyncTasks();
+  }
+
+  function clearSyncTask(save = true) {
+    if (save) snapshotSyncTask();
+    el.syncVideo.pause();
+    syncTaskSeq += 1;
+    syncState.taskId = `sync-${syncTaskSeq}`;
+    syncState.videoUrl = null;
+    syncState.compatUrl = null;
+    syncState.videoFile = null;
+    syncState.videoName = "";
+    syncState.subtitleName = "";
+    syncState.cues = [];
+    syncState.offset = 0;
+    syncState.anchors = [];
+    syncState.selectedId = null;
+    syncState.auto = null;
+    syncState.pendingAuto = null;
+    el.syncVideo.removeAttribute("src");
+    el.syncVideo.load();
+    el.syncEmpty.hidden = false;
+    el.syncVideoName.textContent = "未选择视频";
+    el.syncSubName.textContent = "未选择字幕";
+    el.syncVideoInput.value = "";
+    el.syncSubInput.value = "";
+    el.syncOffset.value = "0.00";
+    el.syncOverlay.textContent = "";
+    el.syncCueList.innerHTML = '<div class="sync-list-empty">载入字幕文件后，这里会显示原始时间与调整后的时间。</div>';
+    el.syncCueCount.textContent = "0 条";
+    renderSyncAnchors();
+    renderSyncAuto();
+    refreshSyncTasks();
+  }
+
+  function clearMuxTask() {
+    stopMuxPolling();
+    if (muxState.objectUrl) URL.revokeObjectURL(muxState.objectUrl);
+    muxState.objectUrl = null;
+    muxState.videoFile = null;
+    muxState.subtitleFile = null;
+    muxState.cues = [];
+    muxState.pollToken = null;
+    muxState.draftId = null;
+    el.muxVideo.removeAttribute("src");
+    el.muxVideo.load();
+    el.muxEmpty.hidden = false;
+    el.muxVideoName.textContent = "未选择视频";
+    el.muxSubName.textContent = "未选择字幕";
+    el.muxVideoInput.value = "";
+    el.muxSubInput.value = "";
+    el.muxOutputName.value = "";
+    el.muxOffset.value = "0";
+    el.muxDownload.hidden = true;
+    el.muxProgress.hidden = true;
+    el.muxOverlay.textContent = "";
+    el.muxStatus.textContent = "选择视频和字幕后即可封装。";
+    el.muxStartBtn.disabled = true;
+    el.muxStartBtn.textContent = "开始封装";
+    refreshMuxTasks();
+  }
+
+  function clearCutTask() {
+    if (cutState.pollTimer) clearTimeout(cutState.pollTimer);
+    cutState.pollTimer = null;
+    cutState.pollToken = null;
+    if (cutState.objectUrl) URL.revokeObjectURL(cutState.objectUrl);
+    cutState.objectUrl = null;
+    cutState.videoFile = null;
+    cutState.draftId = null;
+    cutState.duration = 0;
+    el.cutVideo.removeAttribute("src");
+    el.cutVideo.load();
+    el.cutEmpty.hidden = false;
+    el.cutVideoName.textContent = "未选择视频";
+    el.cutVideoInput.value = "";
+    el.cutStart.value = "00:00:00.000";
+    el.cutEnd.value = "00:00:00.000";
+    el.cutSummary.textContent = "选择视频后设置开始和结束时间。";
+    el.cutStatus.textContent = "选择视频后设置切割范围。";
+    el.cutDownload.hidden = true;
+    el.cutProgress.hidden = true;
+    el.cutStartBtn.disabled = true;
+    el.cutStartBtn.textContent = "开始切割";
+    refreshCutTasks();
+  }
+
+  function clearTranslateTask() {
+    if (state.translateTimer) clearInterval(state.translateTimer);
+    state.translateTimer = null;
+    state.translateToken = null;
+    state.translateDraftId = null;
+    state.translateFile = null;
+    el.translateFileInput.value = "";
+    el.translateFileName.textContent = "或拖到这里";
+    el.translateStartBtn.disabled = true;
+    el.translateProgress.hidden = true;
+    el.translateDownload.hidden = true;
+    el.translatePreviewCount.textContent = "0 条";
+    el.translatePreview.innerHTML = '<p class="translate-empty">翻译完成后会在这里显示前几条结果。</p>';
+    el.translateStatus.textContent = "选择字幕后开始翻译。";
+    refreshTranslateTasks();
+  }
+
+  function initFileDrops() {
+    const videoExt = /\.(mp4|mkv|mov|avi|webm|m4v|ts|flv|wmv|mpg|mpeg)$/i;
+    const subtitleExt = /\.(srt|ass|ssa)$/i;
+    const setInput = (input, file) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const configs = [
+      [el.videoStage, el.fileInput, null, "松开以载入视频"],
+      [el.syncStage, el.syncVideoInput, el.syncSubInput, "松开以载入视频或字幕"],
+      [el.muxVideo.closest(".mux-stage"), el.muxVideoInput, el.muxSubInput, "松开以载入视频或字幕"],
+      [el.cutVideo.closest(".cut-stage"), el.cutVideoInput, null, "松开以载入视频"],
+    ];
+    configs.forEach(([stage, videoInput, subtitleInput, hintText]) => {
+      if (!stage || !videoInput) return;
+      const hint = document.createElement("div");
+      hint.className = "stage-drop-hint";
+      hint.textContent = hintText;
+      stage.append(hint);
+      stage.addEventListener("dragenter", (event) => {
+        event.preventDefault();
+        stage.classList.add("is-dragging");
+      });
+      stage.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      });
+      stage.addEventListener("dragleave", (event) => {
+        if (!stage.contains(event.relatedTarget)) stage.classList.remove("is-dragging");
+      });
+      stage.addEventListener("drop", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        stage.classList.remove("is-dragging");
+        const files = Array.from(event.dataTransfer.files || []);
+        const video = files.find((file) => videoExt.test(file.name));
+        const subtitle = files.find((file) => subtitleExt.test(file.name));
+        if (video) setInput(videoInput, video);
+        if (subtitle && subtitleInput) {
+          setInput(subtitleInput, subtitle);
+        } else if (subtitle) {
+          toast("当前页面只需要视频文件", "error");
+        }
+        if (!video && !(subtitle && subtitleInput)) {
+          toast("请拖入视频文件或 SRT/ASS/SSA 字幕", "error");
+        }
+      });
+    });
+  }
+
+  function initToolPlayers() {
+    [
+      [el.syncVideo, el.syncPlayBtn, el.syncTimeline, el.syncTimeLabel],
+      [el.muxVideo, el.muxPlayBtn, el.muxTimeline, el.muxTimeLabel],
+      [el.cutVideo, el.cutPlayBtn, el.cutTimeline, el.cutTimeLabel],
+    ].forEach(([video, playBtn, timeline, timeLabel]) => {
+      if (!video || !playBtn || !timeline || !timeLabel) return;
+      const update = () => {
+        const duration = Number(video.duration) || 0;
+        const current = Number(video.currentTime) || 0;
+        timeline.max = String(duration || 100);
+        if (!timeline.matches(":active")) timeline.value = String(Math.min(current, duration || 100));
+        const pct = duration > 0 ? (current / duration) * 100 : 0;
+        timeline.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, rgba(255,255,255,.17) ${pct}%)`;
+        timeLabel.textContent = `${fmtClock(current)} / ${fmtClock(duration)}`;
+        playBtn.classList.toggle("is-playing", !video.paused && !video.ended);
+      };
+      playBtn.addEventListener("click", () => {
+        if (video.paused) video.play().catch(() => {});
+        else video.pause();
+      });
+      timeline.addEventListener("input", () => {
+        if (Number(video.duration)) video.currentTime = Number(timeline.value) || 0;
+      });
+      ["loadedmetadata", "durationchange", "timeupdate", "play", "pause", "ended", "emptied"].forEach((name) => {
+        video.addEventListener(name, update);
+      });
+      update();
+    });
+  }
+
   function initMisc() {
     $$('input[name="precision"]', el.precisionGrid).forEach((input) => {
       input.addEventListener("change", () => updatePrecisionUI(input.value));
@@ -3998,8 +5484,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     el.confidence.addEventListener("input", () => {
       el.confidenceValue.textContent = Number(el.confidence.value).toFixed(2);
     });
-    el.minTextRatio.addEventListener("input", () => {
-      el.minTextRatioValue.textContent = `${el.minTextRatio.value}%`;
+    [el.fontName, el.fontSize, el.borderWidth].forEach((node) => {
+      node.addEventListener("change", updateAssDownloadLink);
+      node.addEventListener("input", updateAssDownloadLink);
+    });
+    el.minTextHeight.addEventListener("input", () => {
+      if (state.minGuideVisible) updateMinTextGuide();
     });
     [el.extractionStart, el.extractionEnd].forEach((input) => {
       input.addEventListener("input", updateRangeHint);
@@ -4012,13 +5502,20 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     });
     el.rangeStartNow.addEventListener("click", () => setRangeFromPlayhead("start"));
     el.rangeEndNow.addEventListener("click", () => setRangeFromPlayhead("end"));
-    el.backBtn.addEventListener("click", () => {
-      if (state.dirty) {
-        if (!window.confirm("有未保存的字幕修改，确定返回吗？")) return;
-      }
-      showLanding();
-    });
     el.deleteBtn.addEventListener("click", deleteTask);
+    el.saveSettingsBtn.addEventListener("click", saveCurrentSettings);
+    el.extractRunSelected.addEventListener("click", runSelectedExtractions);
+    el.extractDeleteSelected.addEventListener("click", deleteSelectedExtractions);
+    el.extractSelectAll.addEventListener("change", () => {
+      state.selectedExtractTasks.clear();
+      if (el.extractSelectAll.checked) {
+        el.extractTaskList.querySelectorAll(".task-rail-item").forEach((item) => {
+          const button = item;
+          if (button.dataset.taskId) state.selectedExtractTasks.add(button.dataset.taskId);
+        });
+      }
+      refreshExtractTasks();
+    });
     el.startBtn.addEventListener("click", startExtraction);
     el.cancelBtn.addEventListener("click", cancelTask);
     el.logToggle.addEventListener("click", () => {
@@ -4098,9 +5595,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     initSync();
     initMux();
     initCut();
+    initTranslate();
+    initFileDrops();
+    initToolPlayers();
+    setInterval(refreshTaskRails, 2500);
     checkHealth();
     await loadRecent();
     await restoreLastJob();
+    if (!state.job) showLanding();
+    refreshTaskRails();
   }
 
   boot();

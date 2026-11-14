@@ -49,11 +49,18 @@ def build_ass(cues: list[dict], meta: dict) -> str:
     height = int(meta.get("display_height") or meta.get("height") or 1080)
     roi = meta.get("roi") or {"x": 0.03, "y": 0.52, "w": 0.94, "h": 0.45}
     line_height = float(meta.get("line_height_px") or 0)
-    font_name = meta.get("font_name") or "Heiti SC"
+    font_name = meta.get("font_name") or "Kaiti SC"
 
     if line_height <= 0:
         line_height = height * 0.062
-    font_size = int(round(_clamp(line_height * 0.9, 16, 160)))
+    try:
+        font_size = int(_clamp(float(meta.get("font_size") or 70), 16, 200))
+    except (TypeError, ValueError):
+        font_size = int(round(_clamp(line_height * 0.9, 16, 160)))
+    try:
+        border_width = _clamp(float(meta.get("border_width", 2.0)), 0.0, 12.0)
+    except (TypeError, ValueError):
+        border_width = 2.0
 
     center_y = roi["y"] + roi["h"] / 2
     if center_y >= 0.5:
@@ -78,7 +85,7 @@ PlayResY: {height}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Chinese,{font_name},{font_size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,2.2,0.8,{alignment},{margin_h},{margin_h},{margin_v},1
+Style: Chinese,{font_name},{font_size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,{border_width},0.8,{alignment},{margin_h},{margin_h},{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -126,3 +133,79 @@ def trim_cue_text(text: str, max_chars: int = 200) -> str:
     if len(text) <= max_chars:
         return text
     return text[:max_chars].rstrip()
+
+
+_TIME_RE = re.compile(r"(\d{1,2}):(\d{2}):(\d{2})([,.])(\d{1,3})")
+
+
+def _shift_stamp(value: str, offset: float, ass: bool) -> str:
+    match = _TIME_RE.fullmatch(value.strip())
+    if not match:
+        return value
+    hours, minutes, seconds, separator, fraction = match.groups()
+    fraction_ms = int(fraction.ljust(3, "0")[:3])
+    total = int(hours) * 3600 + int(minutes) * 60 + int(seconds) + fraction_ms / 1000 + offset
+    total = max(0.0, total)
+    total_ms = int(round(total * 1000))
+    h, rem = divmod(total_ms, 3_600_000)
+    m, rem = divmod(rem, 60_000)
+    s, ms = divmod(rem, 1000)
+    if ass:
+        return f"{h}:{m:02d}:{s:02d}.{ms // 10:02d}"
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def _decode_subtitle(data: bytes) -> str:
+    for encoding in ("utf-8-sig", "utf-8", "cp932", "shift_jis", "gb18030"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
+def shift_subtitle_file(input_path: str | Path, output_path: str | Path, offset: float) -> None:
+    """Shift an SRT/ASS/SSA subtitle file without changing its text or styles."""
+    source = Path(input_path)
+    text = _decode_subtitle(source.read_bytes()).replace("\r\n", "\n").replace("\r", "\n")
+    suffix = source.suffix.lower()
+    lines = text.split("\n")
+    if suffix in (".ass", ".ssa") or "[events]" in text.lower():
+        fmt: list[str] | None = None
+        start_index = end_index = -1
+        in_events = False
+        for index, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                in_events = stripped.lower() == "[events]"
+                continue
+            if not in_events:
+                continue
+            if stripped.lower().startswith("format:"):
+                fmt = [part.strip().lower() for part in stripped.split(":", 1)[1].split(",")]
+                start_index = fmt.index("start") if "start" in fmt else -1
+                end_index = fmt.index("end") if "end" in fmt else -1
+                continue
+            if fmt is None or start_index < 0 or end_index < 0:
+                continue
+            if not stripped.lower().startswith("dialogue:"):
+                continue
+            payload = line.split(":", 1)[1]
+            parts = payload.split(",", len(fmt) - 1)
+            if len(parts) <= max(start_index, end_index):
+                continue
+            parts[start_index] = _shift_stamp(parts[start_index], offset, True)
+            parts[end_index] = _shift_stamp(parts[end_index], offset, True)
+            lines[index] = line.split(":", 1)[0] + ":" + ",".join(parts)
+        encoding = "utf-8"
+    else:
+        for index, line in enumerate(lines):
+            if "-->" not in line:
+                continue
+            left, right = line.split("-->", 1)
+            right_time, _, settings = right.strip().partition(" ")
+            lines[index] = f"{_shift_stamp(left.strip(), offset, False)} --> {_shift_stamp(right_time, offset, False)}"
+            if settings:
+                lines[index] += " " + settings
+        encoding = "utf-8-sig"
+    Path(output_path).write_text("\n".join(lines), encoding=encoding)

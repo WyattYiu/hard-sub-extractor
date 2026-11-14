@@ -23,6 +23,10 @@ SPACE_AFTER_OPEN_RE = re.compile("(?<=[「『《【“‘（])\\s+")
 CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 PUNCT_ONLY_RE = re.compile(f"^[{re.escape(CJK_PUNCT)}\\-—_~.·…]+$")
 REPEATED_CHAR_RE = re.compile(r"(.)\1{7,}")
+PAIR_MAP = {
+    "(": ")", "（": "）", "[": "]", "【": "】", "{": "}", "〔": "〕",
+    "《": "》", "〈": "〉", "「": "」", "『": "』", "“": "”", "‘": "’",
+}
 
 _opencc_cache = {}
 
@@ -106,6 +110,32 @@ def normalize_text(text: str) -> str:
     return text.strip(" \t")
 
 
+def strip_unbalanced_punctuation(text: str) -> str:
+    """Remove unmatched brackets/quotes instead of hard-coding each symbol."""
+    if not text:
+        return text
+    stack: list[tuple[str, int]] = []
+    remove: set[int] = set()
+    for index, char in enumerate(text):
+        if char in PAIR_MAP:
+            stack.append((char, index))
+        elif char in PAIR_MAP.values():
+            if stack and PAIR_MAP[stack[-1][0]] == char:
+                stack.pop()
+            else:
+                remove.add(index)
+    for _, index in stack:
+        remove.add(index)
+    if remove:
+        text = "".join(char for index, char in enumerate(text) if index not in remove)
+    if text.count('"') % 2 == 1:
+        if text.endswith('"'):
+            text = text[:-1]
+        elif text.startswith('"'):
+            text = text[1:]
+    return text.strip()
+
+
 def clean_line(text: str) -> str:
     text = normalize_text(text)
     text = re.sub(r"\n+", " ", text)
@@ -120,6 +150,17 @@ def clean_line(text: str) -> str:
         return ""
     if len(text) > 160:
         text = text[:160].rstrip()
+    text = strip_unbalanced_punctuation(text)
+    # Apple Vision often appends a comma/period to a subtitle line. Those
+    # trailing separators are noise; keep question/exclamation marks.
+    text = re.sub(r"[、，,。.；;：:\-—–~～]+\s*$", "", text).rstrip()
+    # Drop a closing quote only when it has no matching opening quote.
+    for closing, opening in (("”", "“"), ("’", "‘"), ("」", "「"), ("』", "『")):
+        while text.endswith(closing) and text.count(closing) > text.count(opening):
+            text = text[:-1].rstrip()
+    for quote in ('"', "'"):
+        if text.endswith(quote) and text.count(quote) % 2 == 1:
+            text = text[:-1].rstrip()
     return text.strip()
 
 

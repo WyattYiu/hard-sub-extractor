@@ -50,7 +50,7 @@ LEGACY_LANGUAGES = {
 PRECISION = {
     "fast": (1.5, 0.67),
     "balanced": (2.0, 0.5),
-    "fine": (3.0, 0.333),
+    "fine": (4.0, 0.25),
 }
 
 DEFAULT_SETTINGS = {
@@ -60,12 +60,14 @@ DEFAULT_SETTINGS = {
     "extraction_end": None,
     "languages": ["zh"],
     "conversion": "none",
-    "precision": "balanced",
+    "precision": "fine",
     "min_duration": 0.3,
     "confidence": 0.15,
-    "min_text_ratio": 0.5,
+    "min_text_height_px": 14,
     "scene_text_filter": True,
-    "font_name": "Heiti SC",
+    "font_name": "Kaiti SC",
+    "font_size": 70,
+    "border_width": 2.0,
 }
 
 
@@ -165,10 +167,10 @@ def normalize_settings(raw: dict | None) -> dict:
     roi["h"] = max(0.02, min(1.0 - roi["y"], roi["h"]))
     settings["roi"] = roi
     try:
-        ratio = float(settings.get("min_text_ratio", 0.5))
+        minimum_height = float(settings.get("min_text_height_px", 14))
     except (TypeError, ValueError):
-        ratio = 0.5
-    settings["min_text_ratio"] = max(0.2, min(1.0, ratio))
+        minimum_height = 14.0
+    settings["min_text_height_px"] = max(2.0, min(300.0, minimum_height))
     history = []
     raw_history = settings.get("roi_history") if isinstance(settings.get("roi_history"), list) else []
     for item in raw_history:
@@ -198,7 +200,7 @@ def normalize_settings(raw: dict | None) -> dict:
     settings["languages"] = normalize_language_selection(raw_languages, raw_legacy)
     settings.pop("language", None)
     if settings["precision"] not in PRECISION:
-        settings["precision"] = "balanced"
+        settings["precision"] = "fine"
     if settings["conversion"] not in ("none", "simplified", "traditional", "traditional_tw"):
         settings["conversion"] = "none"
     try:
@@ -225,7 +227,15 @@ def normalize_settings(raw: dict | None) -> dict:
     if isinstance(scene_filter, str):
         scene_filter = scene_filter.lower() not in ("0", "false", "no", "off", "")
     settings["scene_text_filter"] = bool(scene_filter)
-    settings["font_name"] = str(settings.get("font_name") or "Heiti SC")[:80]
+    settings["font_name"] = str(settings.get("font_name") or "Kaiti SC")[:80]
+    try:
+        settings["font_size"] = int(max(16, min(200, float(settings.get("font_size", 70)))))
+    except (TypeError, ValueError):
+        settings["font_size"] = 70
+    try:
+        settings["border_width"] = round(max(0.0, min(12.0, float(settings.get("border_width", 2.0)))), 1)
+    except (TypeError, ValueError):
+        settings["border_width"] = 2.0
     return settings
 
 
@@ -238,7 +248,14 @@ def _top_left(rect: dict) -> dict:
     }
 
 
-def _ocr_lines(result: dict, min_conf: float, image_h: int, languages: list[str] | None = None) -> list[dict]:
+def _ocr_lines(
+    result: dict,
+    min_conf: float,
+    image_h: int,
+    languages: list[str] | None = None,
+    source_height: int | None = None,
+    min_text_px: float = 0,
+) -> list[dict]:
     """Group Vision observations into visual lines, top to bottom."""
     observations = []
     min_h = max(0.006, 7.0 / max(image_h, 1))
@@ -254,6 +271,14 @@ def _ocr_lines(result: dict, min_conf: float, image_h: int, languages: list[str]
         box = _top_left(item)
         if box["h"] < min_h:
             continue
+        if source_height and min_text_px > 0:
+            height_px = box["h"] * source_height
+            if height_px <= min_text_px * 1.25:
+                centre_x = box["x"] + box["w"] / 2
+                # Small text at the sides is a logo/watermark. A small centred
+                # line is usually the second line of a subtitle and must stay.
+                if centre_x < 0.18 or centre_x > 0.82:
+                    continue
         observations.append({
             "text": text,
             "confidence": confidence,
@@ -444,7 +469,7 @@ class _Extractor:
                     self._check_cancel()
             with self.lock:
                 self.produced += 1
-                self.total_estimate = max(self.produced, int(round(self.probe["duration"] * self.scan_fps)))
+                self.total_estimate = max(self.produced, int(round(self.segment_duration * self.scan_fps)))
             idx += 1
         if idx == 0:
             raise RuntimeError("未能从视频中读取画面，请检查文件是否损坏")
@@ -468,7 +493,8 @@ class _Extractor:
                         min_height=max(0.006, 8.0 / max(height, 1)),
                     )
                     lines = _ocr_lines(
-                        result, self.min_conf, height, self.selected_languages
+                        result, self.min_conf, height, self.selected_languages,
+                        self.source_height, self.settings.get("min_text_height_px", 14),
                     )
                     lines = _lines_inside_roi(lines, self.scan_roi, self.settings["roi"])
                     sample = OCRSample(
@@ -519,6 +545,42 @@ class _Extractor:
                 if item is not None:
                     self.work_queue.task_done()
 
+    def _merge_partial_cues(self, existing: list[dict], fresh: list[dict]) -> list[dict]:
+        """Keep earlier provisional cues when a later window misses them.
+
+        Partial results are allowed to be approximate, but a cue that already
+        appeared should not vanish just because the sliding window moved. The
+        final result still replaces this preview.
+        """
+        merged = [dict(cue) for cue in existing]
+        for cue in fresh:
+            target = None
+            for old in merged:
+                gap = max(0.0, cue["start"] - old["end"], old["start"] - cue["end"])
+                overlap = min(cue["end"], old["end"]) - max(cue["start"], old["start"])
+                shortest = min(cue["end"] - cue["start"], old["end"] - old["start"])
+                overlap_ratio = overlap / shortest if shortest > 0 else 0.0
+                if gap <= max(0.6, self.sample_interval * 2) and (
+                    overlap_ratio >= 0.25
+                    or similarity(old["text"], cue["text"]) >= 0.55
+                    or comparison_key(old["text"]) in comparison_key(cue["text"])
+                    or comparison_key(cue["text"]) in comparison_key(old["text"])
+                ):
+                    target = old
+                    break
+            if target is None:
+                merged.append(dict(cue))
+                continue
+            target["start"] = min(target["start"], cue["start"])
+            target["end"] = max(target["end"], cue["end"])
+            target["confidence"] = max(target["confidence"], cue["confidence"])
+            if len(cue["text"]) > len(target["text"]):
+                target["text"] = cue["text"]
+        merged.sort(key=lambda cue: (cue["start"], cue["end"]))
+        for index, cue in enumerate(merged, 1):
+            cue["id"] = index
+        return merged
+
     def _publish_partial(self, cues: list[dict]) -> None:
         if self.partial_cb is None:
             return
@@ -537,10 +599,10 @@ class _Extractor:
                     samples = sorted(self.samples, key=lambda sample: sample.time)
                 if len(samples) < 6:
                     continue
-                cutoff = samples[-1].time - 1.5
+                cutoff = samples[-1].time - 3.0
                 if cutoff - self.extraction_start < 3.0:
                     continue
-                window_start = max(self.extraction_start, cutoff - 90.0)
+                window_start = max(self.extraction_start, cutoff - 120.0)
                 chunk = [sample for sample in samples if window_start <= sample.time <= cutoff]
                 if len(chunk) < 4:
                     continue
@@ -560,11 +622,7 @@ class _Extractor:
                         "text": text,
                         "confidence": cue.get("confidence", 0.0),
                     })
-                kept = [cue for cue in self.partial_cues if cue["end"] < window_start - 0.3]
-                merged = kept + converted
-                merged.sort(key=lambda cue: (cue["start"], cue["end"]))
-                for index, cue in enumerate(merged, 1):
-                    cue["id"] = index
+                merged = self._merge_partial_cues(self.partial_cues, converted)
                 if merged and (len(merged) != self._partial_published or cutoff - last_published > 2.0):
                     self.partial_cues = merged
                     self._partial_published = len(merged)
@@ -707,19 +765,36 @@ class _Extractor:
         return tracks
 
     def _filter_small_text(self, tracks: list[Track]) -> list[Track]:
-        if len(tracks) < 2:
-            return tracks
-        heights = [track.height for track in tracks]
-        # Use the tallest track as the reference; multiple corner logos can
-        # outnumber the subtitle track and make a median too permissive.
-        reference = max(heights)
-        ratio = float(self.settings.get("min_text_ratio", 0.5))
-        filtered = [
-            track for track in tracks
-            if ratio * reference <= track.height <= 2.4 * reference
-        ]
+        threshold = float(self.settings.get("min_text_height_px", 14))
+        effective = threshold * 1.25
+        filtered = []
+        for track in tracks:
+            height_px = track.height * self.source_height
+            if height_px > effective:
+                filtered.append(track)
+                continue
+            centre_x = self.scan_roi["x"] + track.x * self.scan_roi["w"]
+            if 0.18 <= centre_x <= 0.82:
+                filtered.append(track)
         if filtered and len(filtered) < len(tracks):
-            self.log(f"忽略小字：移除 {len(tracks) - len(filtered)} 条过小轨迹", "info")
+            self.log(f"忽略小字：移除 {len(tracks) - len(filtered)} 条不超过约 {threshold:g}px 的轨迹", "info")
+        return filtered or tracks
+
+    def _filter_edge_text(self, tracks: list[Track]) -> list[Track]:
+        """Drop low-confidence text at the far left/right edges.
+
+        This catches end-credit fragments such as "directed by <name>" even
+        when the user selected a tight, single-line ROI. A confident subtitle
+        is kept regardless of alignment.
+        """
+        filtered = []
+        for track in tracks:
+            centre = self.scan_roi["x"] + track.x * self.scan_roi["w"]
+            if track.confidence < 0.62 and not (0.22 <= centre <= 0.78):
+                continue
+            filtered.append(track)
+        if filtered and len(filtered) < len(tracks):
+            self.log(f"画面文字过滤：移除 {len(tracks) - len(filtered)} 条边缘低置信度文字", "info")
         return filtered or tracks
 
     def _filter_scene_text(self, tracks: list[Track]) -> list[Track]:
@@ -733,6 +808,7 @@ class _Extractor:
         tracks = self._filter_small_text(tracks)
         if not self.settings.get("scene_text_filter", True):
             return tracks
+        tracks = self._filter_edge_text(tracks)
         if len(tracks) < 3 or self.settings["roi"]["h"] < 0.24:
             return tracks
 
@@ -772,25 +848,14 @@ class _Extractor:
         centred = [
             track for track in filtered
             if not (
-                track.confidence < 0.55
+                track.confidence < 0.62
                 and not (
-                    0.10 <= self.scan_roi["x"] + track.x * self.scan_roi["w"] <= 0.90
+                    0.22 <= self.scan_roi["x"] + track.x * self.scan_roi["w"] <= 0.78
                 )
             )
         ]
         if centred:
             filtered = centred
-
-        heights = [track.height for track in filtered]
-        if heights:
-            middle = median(heights)
-            min_ratio = float(self.settings.get("min_text_ratio", 0.5))
-            sized = [
-                track for track in filtered
-                if min_ratio * middle <= track.height <= 2.4 * middle
-            ]
-            if sized:
-                filtered = sized
 
         if 0 < len(filtered) < len(tracks):
             self.log(f"画面文字过滤：保留 {len(filtered)}/{len(tracks)} 条轨迹", "info")
@@ -837,6 +902,7 @@ class _Extractor:
                 "line_height_px": median(heights),
                 "y": track.y,
                 "height": track.height,
+                "hit_times": [round(hit_time, 3) for hit_time, _ in track.hits],
             })
 
         kept.sort(key=lambda c: (c["start"], c["y"]))
@@ -879,12 +945,18 @@ class _Extractor:
                         continue
                     duplicate = True
                 else:
-                    # Different vertical bands: stacked/bilingual lines often
-                    # start or end one OCR sample apart. Merge those, but do
-                    # not bridge unrelated cues with a long gap.
+                    # Different vertical bands: stacked/bilingual lines must
+                    # actually co-occur in OCR samples. A later subtitle line
+                    # can overlap the previous cue after time padding; without
+                    # this check it would be stolen by the previous cue.
                     if overlap_ratio <= 0.30 and gap > gap_limit:
                         continue
                     if max(existing["end"], cue["end"]) - min(existing["start"], cue["start"]) > 12.0:
+                        continue
+                    existing_times = set(existing.get("hit_times") or [])
+                    cue_times = set(cue.get("hit_times") or [])
+                    shared = len(existing_times & cue_times)
+                    if existing_times and cue_times and shared == 0:
                         continue
                     duplicate = False
                 target = existing
@@ -901,6 +973,7 @@ class _Extractor:
             target["end"] = max(target["end"], cue["end"])
             target["confidence"] = max(target["confidence"], cue["confidence"])
             target["line_height_px"] = max(target["line_height_px"], cue["line_height_px"])
+            target["hit_times"] = sorted(set(target.get("hit_times") or []) | set(cue.get("hit_times") or []))
             if duplicate:
                 # Replace the closest existing line with the better OCR read.
                 best_index = min(
@@ -953,6 +1026,7 @@ class _Extractor:
             cue.pop("bands", None)
             cue.pop("y", None)
             cue.pop("height", None)
+            cue.pop("hit_times", None)
 
         # Merge duplicate tracks split by a single missed OCR frame.
         merged.sort(key=lambda c: c["start"])

@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>字幕匠 · 硬字幕提取 / 同步 / 内封 / 切割</title>
+  <title>字幕匠 · 硬字幕提取 / 同步 / 内封 / 切割 / 翻译</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317191f'/%3E%3Cpath d='M8 11V8h3M21 8h3v3M24 21v3h-3M11 24H8v-3M11 15h10M11 19h7' fill='none' stroke='%23f4f0e8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/styles.css?v=1.8.1">
+<link rel="stylesheet" href="/static/styles.css?v=1.15.0">
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -19,7 +19,7 @@
         <span class="brand-copy"><b>字幕匠</b><small>HARDSUB STUDIO</small></span>
       </a>
       <div class="top-actions">
-        <span class="local-pill"><i></i> 本机处理 · Apple Vision</span>
+        <span class="local-pill"><i></i> 本机运行 · 翻译需联网</span>
         <button class="text-btn" id="helpBtn" type="button">使用说明</button>
       </div>
     </header>
@@ -29,6 +29,7 @@
       <button class="app-tab" id="tabSync" type="button">字幕同步</button>
       <button class="app-tab" id="tabMux" type="button">字幕内封</button>
       <button class="app-tab" id="tabCut" type="button">视频切割</button>
+      <button class="app-tab" id="tabTranslate" type="button">字幕翻译</button>
     </nav>
 
     <main>
@@ -39,10 +40,19 @@
           <p class="lede">选择已经内封字幕的视频，设定开始和结束时间，切掉前后广告。快速模式复制视频/音频/字幕流；精确模式重新编码视频、音频和文字字幕，并重新计算字幕时间。</p>
         </div>
         <div class="cut-layout">
+          <aside class="tab-task-rail" id="cutRail">
+            <div class="task-rail-head"><span>任务</span><button id="cutNewTask" type="button">+ 新建</button></div>
+            <div class="task-rail-actions">
+              <label><input type="checkbox" id="cutSelectAll"> 全选</label>
+              <button id="cutDeleteSelected" type="button" disabled>删除选中</button>
+              <button id="cutRunSelected" type="button" disabled>执行选中</button>
+            </div>
+            <div class="task-rail-list" id="cutTaskList"><p class="task-rail-empty">暂无任务</p></div>
+          </aside>
           <div class="cut-main">
-            <div class="cut-player-card">
+            <div class="cut-player-card tool-player-card">
               <div class="cut-stage">
-                <video id="cutVideo" controls playsinline preload="metadata"></video>
+                <video id="cutVideo" playsinline preload="metadata"></video>
                 <div class="mux-empty" id="cutEmpty">
                   <div class="sync-empty-icon">
                     <svg viewBox="0 0 32 32" fill="none"><rect x="3" y="6" width="26" height="20" rx="4" stroke="currentColor" stroke-width="1.6"/><path d="M3 21l7-6 5 4 4-4 10 8" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="21" cy="12" r="2.4" stroke="currentColor" stroke-width="1.6"/></svg>
@@ -50,6 +60,14 @@
                   <b>选择带字幕的视频</b>
                   <span>浏览器不显示内封字幕，但输出会保留全部字幕轨道</span>
                 </div>
+              </div>
+              <div class="video-controls tool-video-controls">
+                <button class="play-btn" id="cutPlayBtn" type="button" aria-label="播放">
+                  <svg class="icon-play" viewBox="0 0 20 20" fill="none"><path d="M7 4.8v10.4l8-5.2z" fill="currentColor"/></svg>
+                  <svg class="icon-pause" viewBox="0 0 20 20" fill="none"><path d="M6 4.5h3v11H6zM11 4.5h3v11h-3z" fill="currentColor"/></svg>
+                </button>
+                <div class="timeline-wrap"><input class="tool-timeline" id="cutTimeline" type="range" min="0" max="100" value="0" step="0.01" aria-label="播放进度"></div>
+                <span class="time-label" id="cutTimeLabel">00:00 / 00:00</span>
               </div>
               <div class="sync-skipbar cut-skipbar">
                 <span>跳转</span>
@@ -87,10 +105,10 @@
               <p class="card-kicker">TRIM MODE</p>
               <h3>切割模式</h3>
               <select class="cut-mode" id="cutMode">
+                <option value="copy" selected>快速 · 不重编码</option>
                 <option value="precise">精确 · 重新编码</option>
-                <option value="copy">快速 · 不重编码</option>
               </select>
-              <p class="sync-note" id="cutModeNote">精确模式会重新编码视频、音频和文字字幕，切割点准确，字幕时间会同步调整；长视频需要一些时间。图形字幕（PGS/DVD）请用快速模式。</p>
+              <p class="sync-note" id="cutModeNote">快速模式复制所有流，速度很快，但从最近关键帧开始，可能保留 1–2 秒广告；内封字幕保持原时间关系。需要精确切割时再切换精确模式。</p>
             </div>
             <div class="mux-card">
               <p class="card-kicker">OUTPUT</p>
@@ -106,6 +124,7 @@
               <a class="download-btn primary mux-download" id="cutDownload" hidden download>下载切割后的 MKV</a>
             </div>
           </aside>
+
         </div>
       </section>
 
@@ -116,10 +135,19 @@
           <p class="lede">选择纯净视频和 SRT / ASS 字幕，把字幕作为独立轨道写入 MKV。视频和音频直接复制，不重新编码。</p>
         </div>
         <div class="mux-layout">
+          <aside class="tab-task-rail" id="muxRail">
+            <div class="task-rail-head"><span>任务</span><button id="muxNewTask" type="button">+ 新建</button></div>
+            <div class="task-rail-actions">
+              <label><input type="checkbox" id="muxSelectAll"> 全选</label>
+              <button id="muxDeleteSelected" type="button" disabled>删除选中</button>
+              <button id="muxRunSelected" type="button" disabled>执行选中</button>
+            </div>
+            <div class="task-rail-list" id="muxTaskList"><p class="task-rail-empty">暂无任务</p></div>
+          </aside>
           <div class="mux-main">
-            <div class="mux-player-card">
+            <div class="mux-player-card tool-player-card">
               <div class="mux-stage">
-                <video id="muxVideo" controls playsinline preload="metadata"></video>
+                <video id="muxVideo" playsinline preload="metadata"></video>
                 <div class="mux-overlay" id="muxOverlay"></div>
                 <div class="mux-empty" id="muxEmpty">
                   <div class="sync-empty-icon">
@@ -128,6 +156,14 @@
                   <b>选择纯净视频</b>
                   <span>预览编码不支持也不影响封装</span>
                 </div>
+              </div>
+              <div class="video-controls tool-video-controls">
+                <button class="play-btn" id="muxPlayBtn" type="button" aria-label="播放">
+                  <svg class="icon-play" viewBox="0 0 20 20" fill="none"><path d="M7 4.8v10.4l8-5.2z" fill="currentColor"/></svg>
+                  <svg class="icon-pause" viewBox="0 0 20 20" fill="none"><path d="M6 4.5h3v11H6zM11 4.5h3v11h-3z" fill="currentColor"/></svg>
+                </button>
+                <div class="timeline-wrap"><input class="tool-timeline" id="muxTimeline" type="range" min="0" max="100" value="0" step="0.01" aria-label="播放进度"></div>
+                <span class="time-label" id="muxTimeLabel">00:00 / 00:00</span>
               </div>
               <div class="sync-filebar">
                 <label class="sync-file-btn">
@@ -162,17 +198,28 @@
               <label class="mux-field">
                 <span>语言</span>
                 <select id="muxLanguage">
-                  <option value="chi">中文</option>
-                  <option value="eng">English</option>
-                  <option value="jpn">日本語</option>
-                  <option value="kor">한국어</option>
-                  <option value="und">未指定</option>
+                  <option value="chi" data-title="中文" selected>中文</option>
+                  <option value="eng" data-title="English">English</option>
+                  <option value="jpn" data-title="日本語">日本語</option>
+                  <option value="kor" data-title="한국어">한국어</option>
+                  <option value="und" data-title="未指定">未指定</option>
                 </select>
               </label>
               <label class="mux-field">
                 <span>轨道标题</span>
-                <input type="text" id="muxTitle" placeholder="例如 简体中文" maxlength="100">
+                <input type="text" id="muxTitle" value="中文" placeholder="默认同语言" maxlength="100">
               </label>
+              <label class="mux-field">
+                <span>字幕偏移（秒）</span>
+                <div class="mux-offset-control">
+                  <button type="button" data-mux-offset="-1">−1s</button>
+                  <button type="button" data-mux-offset="-0.1">−0.1</button>
+                  <input type="number" id="muxOffset" value="0" min="-3600" max="3600" step="0.1" placeholder="0.0">
+                  <button type="button" data-mux-offset="0.1">+0.1</button>
+                  <button type="button" data-mux-offset="1">+1s</button>
+                </div>
+              </label>
+              <p class="sync-note" style="margin-top:-2px">支持 0.1 秒精度；正数让字幕延后，负数让字幕提前。</p>
               <label class="mux-check">
                 <input type="checkbox" id="muxDefault" checked>
                 设为默认字幕轨道
@@ -183,6 +230,10 @@
               <h3>输出 MKV</h3>
               <div class="mux-output-row"><span>容器</span><b>Matroska (.mkv)</b></div>
               <div class="mux-output-row"><span>视频 / 音频</span><b>直接复制，不重编码</b></div>
+              <label class="mux-field">
+                <span>输出文件名</span>
+                <input type="text" id="muxOutputName" placeholder="默认和源文件同名" maxlength="180">
+              </label>
               <button class="sync-auto-btn" id="muxStartBtn" type="button">开始封装</button>
               <div class="mux-progress" id="muxProgress" hidden>
                 <div class="mux-progress-head"><span id="muxProgressLabel">准备封装…</span><b id="muxProgressPct">0%</b></div>
@@ -203,10 +254,19 @@
         </div>
 
         <div class="sync-layout">
+          <aside class="tab-task-rail" id="syncRail">
+            <div class="task-rail-head"><span>任务</span><button id="syncNewTask" type="button">+ 新建</button></div>
+            <div class="task-rail-actions">
+              <label><input type="checkbox" id="syncSelectAll"> 全选</label>
+              <button id="syncDeleteSelected" type="button" disabled>删除选中</button>
+              <button id="syncRunSelected" type="button" disabled>导出选中</button>
+            </div>
+            <div class="task-rail-list" id="syncTaskList"><p class="task-rail-empty">暂无任务</p></div>
+          </aside>
           <div class="sync-main">
-            <div class="sync-player-card">
+            <div class="sync-player-card tool-player-card">
               <div class="sync-stage" id="syncStage">
-                <video id="syncVideo" controls playsinline preload="metadata"></video>
+                <video id="syncVideo" playsinline preload="metadata"></video>
                 <div class="sync-overlay" id="syncOverlay"></div>
                 <div class="sync-empty" id="syncEmpty">
                   <div class="sync-empty-icon">
@@ -215,6 +275,14 @@
                   <b>选择纯净视频</b>
                   <span>自动对齐时只由本机服务临时分析音频</span>
                 </div>
+              </div>
+              <div class="video-controls tool-video-controls">
+                <button class="play-btn" id="syncPlayBtn" type="button" aria-label="播放">
+                  <svg class="icon-play" viewBox="0 0 20 20" fill="none"><path d="M7 4.8v10.4l8-5.2z" fill="currentColor"/></svg>
+                  <svg class="icon-pause" viewBox="0 0 20 20" fill="none"><path d="M6 4.5h3v11H6zM11 4.5h3v11h-3z" fill="currentColor"/></svg>
+                </button>
+                <div class="timeline-wrap"><input class="tool-timeline" id="syncTimeline" type="range" min="0" max="100" value="0" step="0.01" aria-label="播放进度"></div>
+                <span class="time-label" id="syncTimeLabel">00:00 / 00:00</span>
               </div>
               <div class="sync-skipbar">
                 <span>跳转 · ←/→ 5s</span>
@@ -297,7 +365,7 @@
                   <button class="sync-mini-btn" id="syncAddEnd" type="button">+ 终点</button>
                 </div>
               </div>
-              <p class="sync-note">先点选一条字幕，把视频拖到目标位置：点「起点」会让这条字幕及之后一起移动；点「终点」只调整这条字幕的结束时间。每个偏移点也可以直接输入起点/终点偏移秒数。</p>
+              <p class="sync-note">先点选一条字幕：有视频时可把视频拖到目标位置再记录；没有视频也可以直接添加偏移点，然后在右侧「起 / 尾」输入框填写提前或延后秒数。</p>
               <div class="sync-anchor-list" id="syncAnchorList">
                 <div class="sync-list-empty">还没有偏移点。只有整体偏移时不需要添加。</div>
               </div>
@@ -316,7 +384,7 @@
         </div>
       </section>
 
-      <section class="landing" id="landing">
+      <section class="landing" id="landing" hidden>
         <div class="hero">
           <div class="hero-copy">
             <p class="eyebrow">HARD-CODED SUBTITLE EXTRACTOR</p>
@@ -372,24 +440,39 @@
         </section>
       </section>
 
-      <section class="workspace" id="workspace" hidden>
+      <section class="workspace" id="workspace">
+        <div class="extract-head">
+          <p class="eyebrow">HARD-CODED SUBTITLE EXTRACTOR</p>
+          <h1>把画面里的字幕，<em>变成可编辑的文字。</em></h1>
+          <p class="lede">上传影片，框出字幕出现的位置。自动识别简体、繁体与双语多行字幕，并生成可直接使用的 SRT / ASS 文件。</p>
+        </div>
         <div class="workspace-top">
-          <button class="back-btn" id="backBtn" type="button">
-            <svg viewBox="0 0 20 20" fill="none"><path d="M12.5 5L7.5 10l5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            返回
-          </button>
           <div class="job-heading">
-            <h2 id="jobName">未命名影片</h2>
+            <h2 id="jobName">选择视频开始提取</h2>
             <div class="job-meta" id="jobMeta"></div>
           </div>
-          <button class="delete-btn" id="deleteBtn" type="button">删除任务</button>
+          <button class="settings-save-btn" id="saveSettingsBtn" type="button">保存设置</button>
+          <button class="delete-btn" id="deleteBtn" type="button" hidden>删除任务</button>
         </div>
 
         <div class="studio-grid">
+          <aside class="tab-task-rail" id="extractRail">
+            <div class="task-rail-head"><span>任务</span><button id="extractNewTask" type="button">+ 新建</button></div>
+            <div class="task-rail-actions">
+              <label><input type="checkbox" id="extractSelectAll"> 全选</label>
+              <button id="extractDeleteSelected" type="button" disabled>删除选中</button>
+              <button id="extractRunSelected" type="button" disabled>执行选中</button>
+            </div>
+            <div class="task-rail-list" id="extractTaskList"><p class="task-rail-empty">暂无任务</p></div>
+          </aside>
           <div class="main-col">
             <div class="video-card">
               <div class="video-stage" id="videoStage">
                 <video id="video" playsinline preload="none"></video>
+                <div class="min-text-guide" id="minTextGuide" hidden>
+                  <i class="min-text-guide-handle" id="minTextGuideHandle" title="上下拖动调整最小文字高度"></i>
+                  <span class="min-text-guide-label" id="minTextGuideLabel">14 px</span>
+                </div>
                 <div class="roi" id="roi" aria-label="字幕区域">
                   <span class="roi-tag">字幕区域</span>
                   <i class="handle n" data-dir="n"></i>
@@ -403,7 +486,13 @@
                 </div>
                 <div class="caption-overlay" id="captionOverlay" hidden></div>
                 <div class="stage-empty" id="stageEmpty">
-                  <span class="spinner small"></span> 正在载入影片…
+                  <div class="extract-empty-icon">
+                    <svg viewBox="0 0 32 32" fill="none"><rect x="3" y="6" width="26" height="20" rx="4" stroke="currentColor" stroke-width="1.6"/><path d="M3 21l7-6 5 4 4-4 10 8" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="21" cy="12" r="2.4" stroke="currentColor" stroke-width="1.6"/></svg>
+                  </div>
+                  <b>选择视频开始提取</b>
+                  <span>拖入视频，或点击下方按钮</span>
+                  <button class="extract-upload-btn" id="extractUploadBtn" type="button">选择视频</button>
+                  <p class="stage-upload-status" id="stageUploadStatus" hidden></p>
                 </div>
               </div>
               <div class="video-controls">
@@ -458,84 +547,7 @@
               <div class="live-text" id="liveCaption">播放视频，这里会显示当前时间轴上的识别结果。</div>
             </div>
 
-          </div>
-
           <aside class="side-col">
-            <div class="results-card" id="resultsCard" hidden>
-              <div class="results-head">
-                <div>
-                  <p class="eyebrow">OUTPUT</p>
-                  <h3>识别结果 <span id="resultCount"></span></h3>
-                </div>
-                <div class="download-actions">
-                  <button class="save-btn" id="saveBtn" type="button">保存修改</button>
-                  <a class="download-btn" id="downloadSrt" href="#" download>下载 SRT</a>
-                  <a class="download-btn primary" id="downloadAss" href="#" download>下载 ASS</a>
-                </div>
-              </div>
-              <div class="result-stats" id="resultStats"></div>
-              <div class="edit-toolbar">
-                <label class="mobile-select-all">
-                  <input type="checkbox" id="selectAllInline" aria-label="全选当前页">
-                  全选
-                </label>
-                <span class="edit-hint">⌘/Ctrl 点击多选 · Shift 连选</span>
-                <span class="selected-count" id="selectedCount">已选 0 条</span>
-                <div class="edit-actions">
-                  <button class="edit-btn" id="mergeBtn" type="button" disabled>合并所选</button>
-                  <button class="edit-btn danger" id="deleteSelectedBtn" type="button" disabled>删除所选</button>
-                  <button class="edit-btn" id="cleanLangBtn" type="button" title="按当前选择的语种清理现有字幕">清理语种</button>
-                  <button class="edit-btn" id="dedupeBtn" type="button" title="合并相邻的重复尾行字幕">清理重复</button>
-                  <button class="edit-btn" id="undoBtn" type="button" disabled title="撤销 (⌘Z)">撤销</button>
-                  <button class="edit-btn" id="redoBtn" type="button" disabled title="重做 (⇧⌘Z)">重做</button>
-                  <span class="offset-control">
-                    <input id="offsetInput" type="number" step="0.1" value="0.5" aria-label="时间偏移秒数">
-                    <button class="edit-btn offset-btn" id="offsetBtn" type="button" title="有勾选时平移所选，否则平移全部">平移</button>
-                  </span>
-                </div>
-              </div>
-              <div class="table-tools">
-                <div class="search-box">
-                  <svg viewBox="0 0 18 18" fill="none"><circle cx="8" cy="8" r="5.2" stroke="currentColor" stroke-width="1.5"/><path d="M12 12l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                  <input id="searchInput" type="search" placeholder="搜索字幕内容…">
-                </div>
-                <label class="confidence-filter">
-                  <span>置信度</span>
-                  <select id="confidenceFilter" aria-label="按置信度筛选字幕">
-                    <option value="all">全部</option>
-                    <option value="max:0.3">低：≤ 30%</option>
-                    <option value="max:0.5">低：≤ 50%</option>
-                    <option value="max:0.7">低：≤ 70%</option>
-                    <option value="min:0.5">高：≥ 50%</option>
-                    <option value="min:0.7">高：≥ 70%</option>
-                    <option value="min:0.9">高：≥ 90%</option>
-                  </select>
-                </label>
-                <span class="table-count" id="tableCount"></span>
-                <span class="save-state" id="saveState"></span>
-              </div>
-              <div class="table-wrap">
-                <table class="cue-table">
-                  <thead>
-                    <tr>
-                      <th class="col-check"><input type="checkbox" id="selectAllRows" aria-label="全选筛选结果"></th>
-                      <th class="col-id">#</th>
-                      <th class="col-time">开始</th>
-                      <th class="col-time">结束</th>
-                      <th class="col-text">字幕文本</th>
-                      <th class="col-conf">置信度</th>
-                      <th class="col-actions"></th>
-                    </tr>
-                  </thead>
-                  <tbody id="cueBody"></tbody>
-                </table>
-              </div>
-              <div class="table-footer">
-                <span class="table-footer-count" id="visibleCount">显示 0 条</span>
-                <span class="pager-hint">点击行跳转视频 · ⌘/Ctrl 多选 · Shift 连选</span>
-              </div>
-            </div>
-
             <div class="progress-card" id="progressCard" hidden>
               <div class="progress-head">
                 <div><p class="eyebrow">PROCESS</p><h3 id="progressTitle">正在识别</h3></div>
@@ -632,13 +644,13 @@
                     <input type="radio" name="precision" value="fast">
                     <b>快速</b><small>约 1.5 帧/秒</small>
                   </label>
-                  <label class="precision-option is-checked">
-                    <input type="radio" name="precision" value="balanced" checked>
+                  <label class="precision-option">
+                    <input type="radio" name="precision" value="balanced">
                     <b>标准</b><small>约 2 帧/秒</small>
                   </label>
-                  <label class="precision-option">
-                    <input type="radio" name="precision" value="fine">
-                    <b>精细</b><small>约 3 帧/秒</small>
+                  <label class="precision-option is-checked">
+                    <input type="radio" name="precision" value="fine" checked>
+                    <b>精细</b><small>约 4 帧/秒</small>
                   </label>
                 </div>
               </div>
@@ -691,22 +703,37 @@
                   <input id="confidence" type="range" min="0.05" max="0.6" step="0.05" value="0.15">
                 </div>
                 <div class="field compact">
-                  <div class="field-label"><label for="minTextRatio">忽略过小文字</label><span id="minTextRatioValue">50%</span></div>
-                  <input id="minTextRatio" type="range" min="20" max="90" step="5" value="50">
+                  <div class="field-label"><label for="minTextHeight">忽略过小文字</label><span>源视频像素</span></div>
+                  <div class="min-text-height-row">
+                    <input id="minTextHeight" type="number" min="2" max="300" step="1" value="14">
+                    <span>px</span>
+                    <button id="minTextGuideBtn" type="button">画面中调整</button>
+                  </div>
+                  <p class="field-note">低于此高度的文字会被忽略；点「画面中调整」后拖动画面里的高度标记。</p>
                 </div>
                 <div class="field compact">
                   <div class="field-label"><label for="fontName">ASS 字体</label></div>
                   <select id="fontName">
-                    <option value="Heiti SC">黑体 SC（推荐）</option>
-                    <option value="Hiragino Sans GB">冬青黑体</option>
+                    <option value="Kaiti SC" selected>楷体 SC（默认）</option>
+                    <option value="Kaiti TC">楷体 TC</option>
                     <option value="Songti SC">宋体 SC</option>
+                    <option value="Heiti SC">黑体 SC</option>
+                    <option value="Hiragino Sans GB">冬青黑体</option>
                     <option value="PingFang SC">苹方 SC</option>
                     <option value="PingFang TC">苹方 TC</option>
                   </select>
                 </div>
+                <div class="field compact">
+                  <div class="field-label"><label for="fontSize">ASS 字号</label><span>px</span></div>
+                  <input id="fontSize" type="number" min="16" max="200" step="1" value="70">
+                </div>
+                <div class="field compact">
+                  <div class="field-label"><label for="borderWidth">边框宽度</label><span>px</span></div>
+                  <input id="borderWidth" type="number" min="0" max="12" step="0.5" value="2">
+                </div>
               </details>
 
-              <button class="start-btn" id="startBtn" type="button">
+              <button class="start-btn" id="startBtn" type="button" disabled>
                 <span>开始提取字幕</span>
                 <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h11M11 5l5 5-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
@@ -715,7 +742,180 @@
 
             <div class="tip-card" id="tipCard">
               <span class="tip-icon">TIP</span>
-              <p>框选时尽量只包住字幕文字，避开台标、水印和画面内的大字。开启「过滤画面原有文字」后，程序会按位置和停留时间忽略异常文字；高级选项里的「忽略过小文字」可过滤与字幕重叠的台标和角标。</p>
+              <p>框选时尽量只包住字幕文字，避开台标、水印和画面内的大字。开启「过滤画面原有文字」后，程序会按位置和停留时间忽略异常文字；高级选项里的「忽略过小文字」可点「画面中调整」，直接在视频上拖动高度标记来过滤台标和角标。</p>
+            </div>
+          </aside>
+
+          </div>
+
+          <aside class="extract-right-panel">
+            <div class="extract-panel-pane is-active" id="extractResultsPane" role="tabpanel">
+              <div class="results-full">
+        <div class="results-card" id="resultsCard" hidden>
+              <div class="results-head">
+                <div>
+                  <p class="eyebrow">OUTPUT</p>
+                  <h3>识别结果 <span id="resultCount"></span></h3>
+                </div>
+                <div class="download-actions">
+                  <button class="save-btn" id="saveBtn" type="button">保存修改</button>
+                  <a class="download-btn" id="downloadSrt" href="#" download>下载 SRT</a>
+                  <a class="download-btn primary" id="downloadAss" href="#" download>下载 ASS</a>
+                </div>
+              </div>
+              <div class="result-stats" id="resultStats"></div>
+              <div class="edit-toolbar">
+                <label class="mobile-select-all">
+                  <input type="checkbox" id="selectAllInline" aria-label="全选当前页">
+                  全选
+                </label>
+                <span class="edit-hint">⌘/Ctrl 点击多选 · Shift 连选</span>
+                <span class="selected-count" id="selectedCount">已选 0 条</span>
+                <div class="edit-actions">
+                  <button class="edit-btn" id="mergeBtn" type="button" disabled>合并所选</button>
+                  <button class="edit-btn danger" id="deleteSelectedBtn" type="button" disabled>删除所选</button>
+                  <button class="edit-btn" id="cleanLangBtn" type="button" title="按当前选择的语种清理现有字幕">清理语种</button>
+                  <button class="edit-btn" id="dedupeBtn" type="button" title="合并相邻的重复尾行字幕">清理重复</button>
+                  <button class="edit-btn" id="undoBtn" type="button" disabled title="撤销 (⌘Z)">撤销</button>
+                  <button class="edit-btn" id="redoBtn" type="button" disabled title="重做 (⇧⌘Z)">重做</button>
+                  <span class="offset-control">
+                    <input id="offsetInput" type="number" step="0.1" value="0.5" aria-label="时间偏移秒数">
+                    <button class="edit-btn offset-btn" id="offsetBtn" type="button" title="有勾选时平移所选，否则平移全部">平移</button>
+                  </span>
+                </div>
+              </div>
+              <div class="table-tools">
+                <div class="search-box">
+                  <svg viewBox="0 0 18 18" fill="none"><circle cx="8" cy="8" r="5.2" stroke="currentColor" stroke-width="1.5"/><path d="M12 12l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                  <input id="searchInput" type="search" placeholder="搜索字幕内容…">
+                </div>
+                <label class="confidence-filter">
+                  <span>置信度</span>
+                  <select id="confidenceFilter" aria-label="按置信度筛选字幕">
+                    <option value="all">全部</option>
+                    <option value="max:0.3">低：≤ 30%</option>
+                    <option value="max:0.5">低：≤ 50%</option>
+                    <option value="max:0.7">低：≤ 70%</option>
+                    <option value="min:0.5">高：≥ 50%</option>
+                    <option value="min:0.7">高：≥ 70%</option>
+                    <option value="min:0.9">高：≥ 90%</option>
+                  </select>
+                </label>
+                <span class="table-count" id="tableCount"></span>
+                <span class="save-state" id="saveState"></span>
+              </div>
+              <div class="table-wrap">
+                <table class="cue-table">
+                  <thead>
+                    <tr>
+                      <th class="col-check"><input type="checkbox" id="selectAllRows" aria-label="全选筛选结果"></th>
+                      <th class="col-id">#</th>
+                      <th class="col-time">开始</th>
+                      <th class="col-time">结束</th>
+                      <th class="col-text">字幕文本</th>
+                      <th class="col-conf">置信度</th>
+                      <th class="col-actions"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="cueBody"></tbody>
+                </table>
+              </div>
+              <div class="table-footer">
+                <span class="table-footer-count" id="visibleCount">显示 0 条</span>
+                <span class="pager-hint">点击行跳转视频 · ⌘/Ctrl 多选 · Shift 连选</span>
+              </div>
+            </div>
+
+        </div>
+            </div>
+
+          </aside>
+        </div>
+
+
+      </section>
+
+      <section class="translate-view" id="translateView" hidden>
+        <div class="translate-head">
+          <p class="eyebrow">SUBTITLE TRANSLATE</p>
+          <h1>把日文、英文字幕，<em>译成中文。</em></h1>
+          <p class="lede">上传 SRT 或 ASS/SSA 字幕，保留原时间轴、样式和字体设置，只翻译字幕文字。支持日语、英语翻译为繁体中文或简体中文。</p>
+        </div>
+        <div class="translate-layout">
+          <aside class="tab-task-rail" id="translateRail">
+            <div class="task-rail-head"><span>任务</span><button id="translateNewTask" type="button">+ 新建</button></div>
+            <div class="task-rail-actions">
+              <label><input type="checkbox" id="translateSelectAll"> 全选</label>
+              <button id="translateDeleteSelected" type="button" disabled>删除选中</button>
+              <button id="translateRunSelected" type="button" disabled>执行选中</button>
+            </div>
+            <div class="task-rail-list" id="translateTaskList"><p class="task-rail-empty">暂无任务</p></div>
+          </aside>
+          <div class="translate-main">
+            <div class="mux-card translate-card">
+              <div class="mux-card-head">
+                <h2>字幕文件</h2>
+                <span>SRT / ASS / SSA</span>
+              </div>
+              <label class="translate-drop" id="translateDrop">
+                <input id="translateFileInput" type="file" accept=".srt,.ass,.ssa,text/plain" hidden>
+                <b>选择字幕文件</b>
+                <span id="translateFileName">或拖到这里</span>
+              </label>
+              <div class="translate-options">
+                <div class="field compact">
+                  <div class="field-label"><label for="translateSource">源语言</label></div>
+                  <select id="translateSource">
+                    <option value="auto">自动检测</option>
+                    <option value="ja">日语</option>
+                    <option value="en">英语</option>
+                  </select>
+                </div>
+                <div class="field compact">
+                  <div class="field-label"><label for="translateTarget">目标语言</label></div>
+                  <select id="translateTarget">
+                    <option value="zh-Hant">繁体中文</option>
+                    <option value="zh-Hans">简体中文</option>
+                  </select>
+                </div>
+              </div>
+              <label class="translate-check">
+                <input id="translateBilingual" type="checkbox">
+                <span>保留原文（双语字幕）</span>
+              </label>
+              <button class="start-btn" id="translateStartBtn" type="button" disabled>
+                <span>开始翻译</span>
+                <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h11M11 5l5 5-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="mux-progress" id="translateProgress" hidden>
+                <div class="mux-progress-head"><span id="translateProgressLabel">准备翻译…</span><b id="translateProgressPct">0%</b></div>
+                <div class="mux-progress-track"><i id="translateProgressBar"></i></div>
+              </div>
+              <p class="sync-note" id="translateStatus">选择字幕后开始翻译。</p>
+            </div>
+
+            <div class="mux-card translate-preview-card">
+              <div class="mux-card-head">
+                <h2>翻译预览</h2>
+                <span id="translatePreviewCount">0 条</span>
+              </div>
+              <div class="translate-preview" id="translatePreview">
+                <p class="translate-empty">翻译完成后会在这里显示前几条结果。</p>
+              </div>
+            </div>
+          </div>
+
+          <aside class="translate-side">
+            <div class="mux-card">
+              <div class="mux-card-head"><h2>输出</h2><span>保留原格式</span></div>
+              <div class="mux-output-row"><span>文件</span><b id="translateOutputFormat">等待选择</b></div>
+              <div class="mux-output-row"><span>时间轴</span><b>保持不变</b></div>
+              <div class="mux-output-row"><span>样式</span><b>尽量保留</b></div>
+              <a class="download-btn primary mux-download" id="translateDownload" hidden download>下载翻译字幕</a>
+            </div>
+            <div class="mux-card">
+              <p class="sync-note"><b>联网说明</b><br>翻译使用在线翻译服务，字幕文本会发送到 Google 翻译。视频、音频不会上传。</p>
+              <p class="sync-note"><b>格式说明</b><br>SRT 保留时间轴和换行；ASS/SSA 保留 Dialogue 行、样式和 `\N` 换行。行内复杂特效可能被简化。</p>
             </div>
           </aside>
         </div>
@@ -743,11 +943,12 @@
         <li><b>字幕同步（新）。</b>顶部切到「字幕同步」，载入纯净视频和 SRT/ASS 字幕；可先选择原硬字幕视频做音频自动对齐，再用整体偏移或偏移点微调（起点会带动后续字幕，终点只改该条结束时间）；支持 ±1/5/10 秒按钮和 ←/→ 每次 5 秒跳转。浏览器无法播放的编码可点「兼容预览」转成本机 H.264 预览，预览后导出。</li>
         <li><b>字幕内封（新）。</b>顶部切到「字幕内封」，选择纯净视频和 SRT/ASS 字幕，设置语言、标题和默认轨道，封装成 MKV。界面会显示上传和封装进度；视频和音频直接复制，不重新编码。</li>
 
+        <li><b>字幕翻译（新）。</b>顶部切到「字幕翻译」，上传日文或英文 SRT/ASS/SSA，选择繁体或简体中文。翻译会保留时间轴和大部分样式；需要联网，字幕文本会发送到在线翻译服务。</li>
         <li><b>校对并导出。</b>点击行可跳转视频；⌘/Ctrl 点击多选，Shift 连选。识别设置会显示当前字幕区域，可输入 X/Y/宽/高百分比精确定位，并保留最近使用过的历史区域，可一键恢复。删除、合并、平移、改文字和时间都可撤销/重做（⌘Z / ⇧⌘Z）；时间显示精确到毫秒；清理语种和清理重复都会先弹窗展示并逐项勾选；播放器支持音量和静音。</li>
       </ol>
       <div class="help-note">
         <b>关于准确率</b>
-        <p>识别质量取决于字幕字号、背景复杂度和视频清晰度。若画面内文字混入结果，先收紧字幕框，再开启「过滤画面原有文字」。字幕中的空格会保留；多行字幕会自动合并；低分辨率素材会自动放大后再做 OCR。ASS 默认使用黑体，并自动按画面高度设置字号。</p>
+        <p>识别质量取决于字幕字号、背景复杂度和视频清晰度。若画面内文字混入结果，先收紧字幕框，再开启「过滤画面原有文字」。字幕中的空格会保留；多行字幕会自动合并；低分辨率素材会自动放大后再做 OCR。ASS 默认使用楷体、字号 50、边框 2，并自动按画面高度设置字号。</p>
       </div>
       <button class="download-btn primary modal-ok" type="button" data-close>知道了</button>
     </div>
@@ -799,6 +1000,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=1.8.1"></script>
+  <script src="/static/app.js?v=1.15.0"></script>
 </body>
 </html>
