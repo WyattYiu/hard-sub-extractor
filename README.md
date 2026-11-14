@@ -6,19 +6,19 @@
 
 **当前版本：v1.15.0** · [下载 Release](https://github.com/WyattYiu/hard-sub-extractor/releases/latest) · [更新日志](CHANGELOG.md)
 
-从视频画面里提取**硬字幕**（烧录在画面上的字幕），生成可编辑、可下载的 **SRT / ASS** 文件；也可以把字幕同步到另一份纯净视频，封装成带字幕轨道的 MKV，或切掉带字幕视频前后的广告。识别、同步、内封和切割都在本机完成，视频不会上传到云端。
+从视频画面里提取**硬字幕**（烧录在画面上的字幕），生成可编辑、可下载的 **SRT / ASS** 文件；也可以把字幕同步到另一份纯净视频，封装成带字幕轨道的 MKV，切掉带字幕视频前后的广告，或把日文/英文字幕翻译为繁体中文、简体中文。识别、同步、内封和切割都在本机完成，视频不会上传到云端；翻译仅发送字幕文本。
 
 针对 Apple silicon 和中文场景做了优化：使用 macOS 原生 **Vision OCR**，支持中文、英文、日语，最多同时选择两种语言，并可按语种过滤识别结果。
 
-![界面预览](docs/preview.png)
+![硬字幕提取界面](docs/preview-v115.png)
 
-![字幕同步](docs/sync-preview.png)
+![字幕同步](docs/sync-preview-v115.png)
 
-![字幕内封](docs/mux-preview.png)
+![字幕内封](docs/mux-preview-v115.png)
 
-![视频切割](docs/cut-preview.png)
+![视频切割](docs/cut-preview-v115.png)
 
-![增量字幕预览](docs/partial-preview.png)
+![字幕翻译](docs/translate-preview.png)
 
 ## 功能
 
