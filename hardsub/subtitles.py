@@ -164,6 +164,26 @@ def _decode_subtitle(data: bytes) -> str:
     return data.decode("utf-8", errors="replace")
 
 
+def normalize_subtitle_file(input_path: str | Path, output_path: str | Path) -> None:
+    """Convert a subtitle file to UTF-8 before handing it to ffmpeg.
+
+    Old Chinese SRTs are often GB18030/GBK while ffmpeg's SRT demuxer expects
+    UTF-8, which produces mojibake in the muxed MKV. Literal \\N in SRT is also
+    normalized to a real line break.
+    """
+    source = Path(input_path)
+    data = source.read_bytes()
+    if data.startswith(b"\xff\xfe") or data.startswith(b"\xfe\xff"):
+        text = data.decode("utf-16")
+    else:
+        text = _decode_subtitle(data)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    suffix = source.suffix.lower()
+    if suffix == ".srt" or ("[events]" not in text.lower() and " --> " in text):
+        text = text.replace("\\N", "\n").replace("\\n", "\n")
+    Path(output_path).write_text(text, encoding="utf-8")
+
+
 def shift_subtitle_file(input_path: str | Path, output_path: str | Path, offset: float) -> None:
     """Shift an SRT/ASS/SSA subtitle file without changing its text or styles."""
     source = Path(input_path)

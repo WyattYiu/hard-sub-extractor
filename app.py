@@ -23,7 +23,7 @@ from hardsub.paths import OCR_BINARY, STATIC_DIR
 from hardsub.media import ensure_media_tools, MediaError, probe_video
 from hardsub.audio_sync import align_audio
 from hardsub.translator import TranslationError, translate_subtitle_file
-from hardsub.subtitles import shift_subtitle_file
+from hardsub.subtitles import normalize_subtitle_file, shift_subtitle_file
 
 app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="/static")
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024 * 1024
@@ -92,7 +92,7 @@ def health():
         "ffmpeg": ffmpeg,
         "ffprobe": ffprobe,
         "vision": OCR_BINARY.exists(),
-        "version": "1.15.0",
+        "version": "1.15.1",
     })
 
 
@@ -525,6 +525,9 @@ def mux_video():
     try:
         video.save(str(video_path))
         subtitle.save(str(subtitle_path))
+        normalized_path = work_dir / f"subtitle.utf8{subtitle_suffix}"
+        normalize_subtitle_file(subtitle_path, normalized_path)
+        subtitle_path = normalized_path
         try:
             offset = float(request.form.get("offset") or 0)
         except ValueError:
