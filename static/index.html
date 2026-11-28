@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light">
   <title>字幕匠 · 硬字幕提取 / 同步 / 内封 / 切割 / 翻译</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317191f'/%3E%3Cpath d='M8 11V8h3M21 8h3v3M24 21v3h-3M11 24H8v-3M11 15h10M11 19h7' fill='none' stroke='%23f4f0e8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/styles.css?v=1.15.1">
+<link rel="stylesheet" href="/static/styles.css?v=1.17.4">
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -29,6 +29,8 @@
       <button class="app-tab" id="tabSync" type="button">字幕同步</button>
       <button class="app-tab" id="tabMux" type="button">字幕内封</button>
       <button class="app-tab" id="tabCut" type="button">视频切割</button>
+      <button class="app-tab" id="tabSplit" type="button">TS 分割</button>
+      <button class="app-tab" id="tabHevc" type="button">H.265 转码</button>
       <button class="app-tab" id="tabTranslate" type="button">字幕翻译</button>
     </nav>
 
@@ -835,6 +837,133 @@
 
       </section>
 
+      <section class="split-view" id="splitView" hidden>
+        <div class="split-head">
+          <p class="eyebrow">TS SPLIT</p>
+          <h1>按时间点，<em>一分为二。</em></h1>
+          <p class="lede">选择一个 TS 合集视频，输入分割时间点，生成前后两个 TS 文件。精确模式会重新编码，切点准确；快速模式直接复制流。</p>
+        </div>
+        <div class="split-layout">
+          <div class="split-main">
+            <div class="mux-card">
+              <div class="mux-card-head"><h2>源视频</h2><span>TS / MP4 / MKV</span></div>
+              <div class="split-video-wrap">
+                <video id="splitVideo" playsinline preload="metadata"></video>
+                <div class="split-empty" id="splitEmpty">
+                  <b>选择合集视频</b>
+                  <span>TS 文件可直接分割</span>
+                </div>
+              </div>
+              <div class="sync-filebar">
+                <label class="sync-file-btn">
+                  <svg viewBox="0 0 18 18" fill="none"><path d="M3 5.5h4l1.2 1.5H15v8H3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 10h6M9 7.5v5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                  选择视频
+                  <input type="file" id="splitVideoInput" accept="video/*,.ts" hidden>
+                </label>
+                <span class="sync-file-name" id="splitVideoName">未选择视频</span>
+              </div>
+            </div>
+            <div class="mux-card">
+              <div class="mux-card-head"><h2>分割设置</h2><span>前后两段</span></div>
+              <div class="split-fields">
+                <label class="mux-field">
+                  <span>分割时间点</span>
+                  <input id="splitTime" type="text" inputmode="decimal" placeholder="00:30:00.000">
+                </label>
+                <label class="mux-field">
+                  <span>模式</span>
+                  <select id="splitMode">
+                    <option value="precise">精确 · 重新编码</option>
+                    <option value="copy">快速 · 不重编码</option>
+                  </select>
+                </label>
+              </div>
+              <p class="sync-note" id="splitHint">选择视频后可输入时间点；精确模式切点准确，但需要重新编码。</p>
+              <button class="sync-auto-btn" id="splitStartBtn" type="button" disabled>分割为两个 TS</button>
+              <div class="mux-progress" id="splitProgress" hidden>
+                <div class="mux-progress-head"><span id="splitProgressLabel">准备分割…</span><b id="splitProgressPct">0%</b></div>
+                <div class="mux-progress-track"><i id="splitProgressBar"></i></div>
+              </div>
+              <p class="sync-note" id="splitStatus">选择视频后设置分割点。</p>
+            </div>
+          </div>
+          <aside class="split-side">
+            <div class="mux-card">
+              <div class="mux-card-head"><h2>输出</h2><span>自动保存</span></div>
+              <div id="splitResults" class="split-results">
+                <p class="translate-empty">分割完成后会显示两个文件。</p>
+              </div>
+            </div>
+            <div class="mux-card">
+              <p class="sync-note"><b>说明</b><br>精确模式会重新编码视频与音频，时间点准确；快速模式按关键帧复制，速度更快。成品自动保存到 Downloads 后清理临时文件。</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="hevc-view" id="hevcView" hidden>
+        <div class="split-head">
+          <p class="eyebrow">H.265 ENCODE</p>
+          <h1>把 H.264，<em>压成 H.265。</em></h1>
+          <p class="lede">把视频转成 H.265/HEVC。硬件模式使用 Apple VideoToolbox，速度快；软件模式使用 x265，体积更小但耗时更长。</p>
+        </div>
+        <div class="split-layout">
+          <div class="split-main">
+            <div class="mux-card">
+              <div class="mux-card-head"><h2>源视频</h2><span>MP4 / MKV / TS</span></div>
+              <div class="split-video-wrap">
+                <video id="hevcVideo" playsinline preload="metadata"></video>
+                <div class="split-empty" id="hevcEmpty"><b>选择要转码的视频</b><span>输出为 H.265 MP4</span></div>
+              </div>
+              <div class="sync-filebar">
+                <label class="sync-file-btn">
+                  <svg viewBox="0 0 18 18" fill="none"><path d="M3 5.5h4l1.2 1.5H15v8H3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 10h6M9 7.5v5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                  选择视频
+                  <input type="file" id="hevcVideoInput" accept="video/*,.ts,.mkv" hidden>
+                </label>
+                <span class="sync-file-name" id="hevcVideoName">未选择视频</span>
+              </div>
+            </div>
+            <div class="mux-card">
+              <div class="mux-card-head"><h2>编码设置</h2><span>H.265 / HEVC</span></div>
+              <div class="split-fields">
+                <label class="mux-field">
+                  <span>编码模式</span>
+                  <select id="hevcMode">
+                    <option value="hardware">硬件加速 · 快速</option>
+                    <option value="software">软件编码 · 更小</option>
+                  </select>
+                </label>
+                <label class="mux-field">
+                  <span id="hevcQualityLabel">目标码率</span>
+                  <select id="hevcQuality"></select>
+                </label>
+              </div>
+              <label class="mux-check"><input type="checkbox" id="hevcKeepAudio" checked> 保留原音频（不重新编码）</label>
+              <p class="sync-note" id="hevcHint">硬件模式可保持源码率，或选源码率 50% 把体积大约减半；软件模式使用 x265，体积更小但耗时更长。</p>
+              <div class="hevc-actions">
+                <button class="sync-auto-btn" id="hevcStartBtn" type="button" disabled>开始 H.265 转码</button>
+                <button class="sync-stop-btn" id="hevcStopBtn" type="button" hidden>停止转码</button>
+              </div>
+              <div class="mux-progress" id="hevcProgress" hidden>
+                <div class="mux-progress-head"><span id="hevcProgressLabel">准备转码…</span><b id="hevcProgressPct">0%</b></div>
+                <div class="mux-progress-track"><i id="hevcProgressBar"></i></div>
+              </div>
+              <p class="sync-note" id="hevcStatus">选择视频后开始转码。</p>
+            </div>
+          </div>
+          <aside class="split-side">
+            <div class="mux-card">
+              <div class="mux-card-head"><h2>输出</h2><span>自动保存</span></div>
+              <div id="hevcResults" class="split-results"><p class="translate-empty">转码完成后会显示文件。</p></div>
+            </div>
+            <div class="mux-card">
+              <p class="sync-note"><b>提示</b><br>硬件编码速度快，但同码率画质通常不如 x265；软件编码适合追求更小体积。成品自动保存到 Downloads。</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
       <section class="translate-view" id="translateView" hidden>
         <div class="translate-head">
           <p class="eyebrow">SUBTITLE TRANSLATE</p>
@@ -1000,6 +1129,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=1.15.1"></script>
+  <script src="/static/app.js?v=1.17.4"></script>
 </body>
 </html>

@@ -31,11 +31,13 @@ app.config["JSON_AS_ASCII"] = False
 manager = JobManager()
 PROXIES_DIR = manager.jobs_dir.parent / "proxies"
 PROXIES_DIR.mkdir(parents=True, exist_ok=True)
-MUX_DIR = manager.jobs_dir.parent / "mux"
+CACHE_ROOT = Path.home() / "Library" / "Caches" / "hard-sub-extractor"
+CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+MUX_DIR = CACHE_ROOT / "mux"
 MUX_DIR.mkdir(parents=True, exist_ok=True)
 MUX_JOBS: dict[str, dict] = {}
 MUX_LOCK = threading.Lock()
-CUT_DIR = manager.jobs_dir.parent / "cut"
+CUT_DIR = CACHE_ROOT / "cut"
 CUT_DIR.mkdir(parents=True, exist_ok=True)
 # Cut jobs are temporary: the finished file is auto-saved to ~/Downloads.
 # Remove leftovers from a previous run so the work directory never grows.
@@ -49,6 +51,14 @@ for _stale in CUT_DIR.iterdir():
         pass
 CUT_JOBS: dict[str, dict] = {}
 CUT_LOCK = threading.Lock()
+SPLIT_DIR = CACHE_ROOT / "split"
+SPLIT_DIR.mkdir(parents=True, exist_ok=True)
+SPLIT_JOBS: dict[str, dict] = {}
+SPLIT_LOCK = threading.Lock()
+HEVC_DIR = CACHE_ROOT / "hevc"
+HEVC_DIR.mkdir(parents=True, exist_ok=True)
+HEVC_JOBS: dict[str, dict] = {}
+HEVC_LOCK = threading.Lock()
 TRANSLATE_DIR = manager.jobs_dir.parent / "translations"
 TRANSLATE_DIR.mkdir(parents=True, exist_ok=True)
 TRANSLATE_JOBS: dict[str, dict] = {}
@@ -92,7 +102,7 @@ def health():
         "ffmpeg": ffmpeg,
         "ffprobe": ffprobe,
         "vision": OCR_BINARY.exists(),
-        "version": "1.15.1",
+        "version": "1.17.4",
     })
 
 
@@ -458,6 +468,9 @@ def _run_mux_job(token: str) -> None:
         duration = float(job.get("duration") or 0.0)
         if process.stdout is not None:
             for line in process.stdout:
+                if job.get("cancel_requested"):
+                    process.terminate()
+                    break
                 line = line.strip()
                 if line.startswith("out_time_us="):
                     value = line.split("=", 1)[1]
@@ -623,6 +636,376 @@ def mux_status(token: str):
     })
 
 
+def _split_progress_seconds(value: str) -> float:
+    try:
+        if ":" in value:
+            hours, minutes, seconds = value.split(":")
+            return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _save_to_downloads(source: Path, filename: str) -> Path:
+    downloads = Path.home() / "Downloads"
+    downloads.mkdir(parents=True, exist_ok=True)
+    target = downloads / _safe_filename(filename, "output.ts")
+    stem, suffix = target.stem, target.suffix
+    counter = 2
+    while target.exists():
+        target = downloads / f"{stem} ({counter}){suffix}"
+        counter += 1
+    shutil.move(str(source), str(target))
+    return target
+
+
+def _run_split_job(token: str) -> None:
+    job = SPLIT_JOBS.get(token)
+    if not job:
+        return
+    try:
+        job["stage"] = "splitting"
+        job["progress"] = 0.02
+        job["message"] = "准备分割…"
+        ffmpeg, _ = ensure_media_tools()
+        source = job["input_path"]
+        point = float(job["split_time"])
+        duration = float(job["duration"])
+        bounds = [(0.0, point, "part1"), (point, max(0.0, duration - point), "part2")]
+        parts = []
+        for index, (start, length, tag) in enumerate(bounds):
+            if length <= 0.05:
+                continue
+            output = job["work_dir"] / f"{tag}.ts"
+            command = [
+                ffmpeg, "-y", "-v", "error", "-nostdin",
+                "-ss", f"{start:.3f}", "-i", str(source), "-t", f"{length:.3f}",
+                "-map", "0:v?", "-map", "0:a?",
+            ]
+            if job["mode"] == "precise":
+                command += [
+                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+                ]
+            else:
+                command += ["-c", "copy", "-avoid_negative_ts", "make_zero"]
+            command += ["-f", "mpegts", str(output)]
+            job["progress"] = 0.05 + index * 0.45
+            job["message"] = f"正在生成第 {index + 1} 段…"
+            process = subprocess.run(command, capture_output=True, text=True, timeout=7200)
+            if process.returncode != 0:
+                detail = process.stderr.strip().splitlines()
+                raise ValueError(detail[-1] if detail else "ffmpeg 分割失败")
+            info = probe_video(output)
+            parts.append({
+                "index": index + 1,
+                "filename": f"{job['stem']}_part{index + 1}.ts",
+                "path": output,
+                "size": output.stat().st_size,
+                "duration": info.get("duration", 0),
+            })
+            job["progress"] = 0.1 + (index + 1) * 0.42
+        if not parts:
+            raise ValueError("分割点不在视频时长内")
+        saved = []
+        for part in parts:
+            target = _save_to_downloads(part["path"], part["filename"])
+            saved.append({
+                "filename": target.name,
+                "saved_path": str(target),
+                "size": part["size"],
+                "duration": part["duration"],
+            })
+        job["result"] = {"parts": saved}
+        job["progress"] = 1.0
+        job["stage"] = "done"
+        job["message"] = f"分割完成，共 {len(saved)} 段"
+    except Exception as exc:
+        job["stage"] = "error"
+        job["error"] = str(exc)
+        job["message"] = f"分割失败：{exc}"
+    finally:
+        job["updated_at"] = time.time()
+        if job.get("stage") == "done":
+            shutil.rmtree(job["work_dir"], ignore_errors=True)
+
+
+@app.post("/api/split")
+def split_video():
+    video = request.files.get("video")
+    if video is None or not video.filename:
+        return _error("没有收到视频文件")
+    try:
+        split_time = float(request.form.get("split_time") or 0)
+    except ValueError:
+        return _error("分割时间格式不正确")
+    mode = (request.form.get("mode") or "precise").lower()
+    if mode not in ("copy", "precise"):
+        mode = "precise"
+    token = uuid.uuid4().hex[:16]
+    work_dir = SPLIT_DIR / token
+    work_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(video.filename).suffix.lower() or ".ts"
+    input_path = work_dir / f"input{suffix}"
+    try:
+        video.save(str(input_path))
+        info = probe_video(input_path)
+        duration = float(info.get("duration") or 0)
+        if split_time <= 0 or split_time >= duration:
+            raise ValueError("分割点必须在视频开始和结束之间")
+        stem = Path(_safe_filename(video.filename, "video")).stem
+        with SPLIT_LOCK:
+            SPLIT_JOBS[token] = {
+                "token": token,
+                "work_dir": work_dir,
+                "input_path": input_path,
+                "split_time": split_time,
+                "duration": duration,
+                "mode": mode,
+                "stem": stem,
+                "stage": "queued",
+                "progress": 0.0,
+                "message": "准备分割…",
+                "error": "",
+                "result": None,
+                "updated_at": time.time(),
+            }
+        thread = threading.Thread(target=_run_split_job, args=(token,), daemon=True)
+        thread.start()
+        return jsonify({"token": token, "status": "queued"}), 202
+    except Exception as exc:
+        shutil.rmtree(work_dir, ignore_errors=True)
+        return _error(f"分割失败：{exc}", 400)
+
+
+@app.get("/api/split/<token>/status")
+def split_status(token: str):
+    if not token or any(char not in "0123456789abcdef" for char in token):
+        return _error("无效的分割任务", 404)
+    job = SPLIT_JOBS.get(token)
+    if not job:
+        return _error("分割任务不存在或已过期", 404)
+    return jsonify({
+        "stage": job["stage"], "progress": job["progress"],
+        "message": job["message"], "error": job["error"], "result": job["result"],
+    })
+
+
+@app.get("/api/split/<token>/download/<int:part>")
+def split_download(token: str, part: int):
+    job = SPLIT_JOBS.get(token)
+    if not job or job["stage"] != "done" or not job.get("result"):
+        return _error("分割结果尚未准备好", 404)
+    parts = job["result"].get("parts") or []
+    if part < 1 or part > len(parts):
+        return _error("分割片段不存在", 404)
+    target = Path(parts[part - 1]["saved_path"])
+    if not target.exists():
+        return _error("分割文件不存在", 404)
+    return send_file(target, as_attachment=True, download_name=target.name)
+
+
+def _video_bitrate(path: Path) -> int:
+    _, ffprobe = ensure_media_tools()
+    try:
+        process = subprocess.run(
+            [ffprobe, "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=bit_rate", "-of", "default=nw=1:nk=1", str(path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        return max(0, int(float(process.stdout.strip())))
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return 0
+
+
+def _run_hevc_job(token: str) -> None:
+    job = HEVC_JOBS.get(token)
+    if not job:
+        return
+    try:
+        job["stage"] = "encoding"
+        job["progress"] = 0.01
+        job["message"] = "正在初始化编码器…"
+        ffmpeg, _ = ensure_media_tools()
+        command = [
+            ffmpeg, "-y", "-v", "error", "-progress", "pipe:1", "-nostats",
+            "-i", str(job["input_path"]), "-map", "0:v:0", "-map", "0:a?",
+        ]
+        if job["mode"] == "hardware":
+            command += [
+                "-c:v", "hevc_videotoolbox", "-b:v", job["bitrate"],
+                "-tag:v", "hvc1", "-allow_sw", "1",
+            ]
+        else:
+            command += [
+                "-c:v", "libx265", "-preset", job["preset"], "-crf", str(job["crf"]),
+                "-tag:v", "hvc1", "-x265-params", "log-level=error",
+            ]
+        command += ["-map_metadata", "0", "-map_chapters", "0"]
+        if job["keep_audio"]:
+            command += ["-c:a", "copy"]
+        else:
+            command += ["-an"]
+        command += ["-movflags", "+faststart", str(job["output_path"])]
+        process = subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1,
+        )
+        job["process"] = process
+        duration = max(0.01, float(job.get("duration") or 0))
+        if process.stdout is not None:
+            for line in process.stdout:
+                if job.get("cancel_requested"):
+                    process.terminate()
+                    break
+                line = line.strip()
+                if line.startswith("out_time_us="):
+                    try:
+                        seconds = float(line.split("=", 1)[1]) / 1_000_000
+                    except ValueError:
+                        seconds = 0.0
+                    if seconds > 0:
+                        job["progress"] = round(min(0.98, seconds / duration), 3)
+                elif line.startswith("out_time="):
+                    seconds = _split_progress_seconds(line.split("=", 1)[1])
+                    if seconds > 0:
+                        job["progress"] = round(min(0.98, seconds / duration), 3)
+                elif line.startswith("progress=") and line.endswith("end"):
+                    job["progress"] = 0.99
+        code = process.wait(timeout=30)
+        if code != 0:
+            raise ValueError("ffmpeg H.265 编码失败")
+        info = probe_video(job["output_path"])
+        target = _save_to_downloads(job["output_path"], job["output_name"])
+        job["result"] = {
+            "filename": target.name,
+            "saved_path": str(target),
+            "size": target.stat().st_size,
+            "duration": info.get("duration", 0),
+            "video_codec": info.get("codec", ""),
+            "audio_codec": info.get("audio_codec", ""),
+        }
+        job["progress"] = 1.0
+        job["stage"] = "done"
+        job["message"] = "H.265 转码完成"
+    except Exception as exc:
+        if job.get("cancel_requested"):
+            job["stage"] = "cancelled"
+            job["message"] = "转码已停止"
+            job["error"] = ""
+        else:
+            job["stage"] = "error"
+            job["error"] = str(exc)
+            job["message"] = f"转码失败：{exc}"
+    finally:
+        job.pop("process", None)
+        job["updated_at"] = time.time()
+        if job.get("stage") in ("done", "cancelled"):
+            shutil.rmtree(job["work_dir"], ignore_errors=True)
+
+
+@app.post("/api/hevc")
+def hevc_transcode():
+    video = request.files.get("video")
+    if video is None or not video.filename:
+        return _error("没有收到视频文件")
+    mode = (request.form.get("mode") or "hardware").lower()
+    if mode not in ("hardware", "software"):
+        mode = "hardware"
+    keep_audio = (request.form.get("keep_audio") or "1").lower() not in ("0", "false", "no")
+    bitrate = (request.form.get("bitrate") or "4M").strip()
+    source_modes = {"source", "source75", "source50"}
+    if bitrate.lower() not in source_modes and not re.fullmatch(r"[1-9][0-9]*(?:\.[0-9]+)?[kKmM]?", bitrate):
+        bitrate = "4M"
+    try:
+        crf = int(max(18, min(35, float(request.form.get("crf") or 26))))
+    except ValueError:
+        crf = 26
+    preset = (request.form.get("preset") or "medium").lower()
+    if preset not in ("fast", "medium", "slow"):
+        preset = "medium"
+    token = uuid.uuid4().hex[:16]
+    work_dir = HEVC_DIR / token
+    work_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(video.filename).suffix.lower() or ".mp4"
+    input_path = work_dir / f"input{suffix}"
+    output_path = work_dir / "output.mp4"
+    try:
+        video.save(str(input_path))
+        info = probe_video(input_path)
+        if mode == "hardware" and bitrate.lower() in source_modes:
+            source_bitrate = _video_bitrate(input_path) or int(info.get("bit_rate") or 0)
+            factor = {"source": 1.0, "source75": 0.75, "source50": 0.5}[bitrate.lower()]
+            bitrate = str(int(source_bitrate * factor)) if source_bitrate else "4M"
+        stem = Path(_safe_filename(video.filename, "video")).stem
+        with HEVC_LOCK:
+            HEVC_JOBS[token] = {
+                "token": token, "work_dir": work_dir,
+                "input_path": input_path, "output_path": output_path,
+                "output_name": f"{stem}_h265.mp4",
+                "mode": mode, "bitrate": bitrate, "crf": crf, "preset": preset,
+                "keep_audio": keep_audio, "duration": info.get("duration", 0),
+                "stage": "queued", "progress": 0.0,
+                "message": "准备转码…", "error": "", "result": None,
+                "updated_at": time.time(),
+            }
+        thread = threading.Thread(target=_run_hevc_job, args=(token,), daemon=True)
+        thread.start()
+        return jsonify({"token": token, "status": "queued"}), 202
+    except Exception as exc:
+        shutil.rmtree(work_dir, ignore_errors=True)
+        return _error(f"转码失败：{exc}", 400)
+
+
+@app.get("/api/hevc/<token>/status")
+def hevc_status(token: str):
+    if not token or any(char not in "0123456789abcdef" for char in token):
+        return _error("无效的转码任务", 404)
+    job = HEVC_JOBS.get(token)
+    if not job:
+        return _error("转码任务不存在或已过期", 404)
+    return jsonify({
+        "stage": job["stage"], "progress": job["progress"],
+        "message": job["message"], "error": job["error"], "result": job["result"],
+    })
+
+
+@app.post("/api/hevc/<token>/cancel")
+def hevc_cancel(token: str):
+    job = HEVC_JOBS.get(token)
+    if not job:
+        return _error("转码任务不存在或已过期", 404)
+    if job["stage"] in ("done", "error", "cancelled"):
+        return jsonify({"ok": True, "stage": job["stage"]})
+    job["cancel_requested"] = True
+    process = job.get("process")
+    if process is not None and process.poll() is None:
+        try:
+            process.terminate()
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        except OSError:
+            pass
+    job["stage"] = "cancelled"
+    job["message"] = "转码已停止"
+    job["error"] = ""
+    job["updated_at"] = time.time()
+    shutil.rmtree(job["work_dir"], ignore_errors=True)
+    return jsonify({"ok": True, "stage": "cancelled"})
+
+
+@app.get("/api/hevc/<token>/download")
+def hevc_download(token: str):
+    job = HEVC_JOBS.get(token)
+    if not job or job["stage"] != "done" or not job.get("result"):
+        return _error("转码结果尚未准备好", 404)
+    target = Path(job["result"]["saved_path"])
+    if not target.exists():
+        return _error("转码文件不存在", 404)
+    return send_file(target, as_attachment=True, download_name=target.name)
+
+
 def _first_subtitle_codec(path: Path) -> str:
     _, ffprobe = ensure_media_tools()
     process = subprocess.run(
@@ -671,6 +1054,9 @@ def _run_cut_job(token: str) -> None:
         duration = max(0.01, job["end"] - job["start"])
         if process.stdout is not None:
             for line in process.stdout:
+                if job.get("cancel_requested"):
+                    process.terminate()
+                    break
                 line = line.strip()
                 if line.startswith("out_time_us="):
                     try:

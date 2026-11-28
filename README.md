@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%2012%2B-lightgrey)](https://github.com/WyattYiu/hard-sub-extractor)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/WyattYiu/hard-sub-extractor)
 
-**当前版本：v1.15.1** · [下载 Release](https://github.com/WyattYiu/hard-sub-extractor/releases/latest) · [更新日志](CHANGELOG.md)
+**当前版本：v1.17.4** · [下载 Release](https://github.com/WyattYiu/hard-sub-extractor/releases/latest) · [更新日志](CHANGELOG.md)
 
 从视频画面里提取**硬字幕**（烧录在画面上的字幕），生成可编辑、可下载的 **SRT / ASS** 文件；也可以把字幕同步到另一份纯净视频，封装成带字幕轨道的 MKV，切掉带字幕视频前后的广告，或把日文/英文字幕翻译为繁体中文、简体中文。识别、同步、内封和切割都在本机完成，视频不会上传到云端；翻译仅发送字幕文本。
 
@@ -38,6 +38,10 @@
 - 内封页选择字幕后，播放预览会直接叠加显示 SRT/ASS 内容
 - 字幕内封显示真实上传/封装进度
 - 新增「视频切割」tab：切掉前后广告，保留内封字幕；可快速流复制或精确重编码
+- 新增「TS 分割」tab：按时间点把 TS 合集分为前后两个 TS，成品自动保存到 Downloads
+- 新增「H.265 转码」tab：H.264 转 H.265，支持 VideoToolbox 硬件编码和 x265 软件编码
+- H.265 支持保持源码率、源码率 75%/50%，可停止转码
+- 临时文件存放在本地缓存目录，不写入 iCloud；成品自动保存到 Downloads
 - 结果表中的开始/结束时间显示到毫秒，与导出的 SRT 精度一致
 - 「清理语种」「清理重复」都会先弹窗列出受影响的字幕，逐项勾选后才执行
 - 识别过程中实时显示已识别的增量字幕，可提前发现区域/语种问题并立即取消

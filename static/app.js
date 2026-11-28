@@ -12,7 +12,42 @@
     tabSync: $("#tabSync"),
     tabMux: $("#tabMux"),
     tabCut: $("#tabCut"),
+    tabSplit: $("#tabSplit"),
+    tabHevc: $("#tabHevc"),
     tabTranslate: $("#tabTranslate"),
+    hevcView: $("#hevcView"),
+    hevcVideo: $("#hevcVideo"),
+    hevcVideoInput: $("#hevcVideoInput"),
+    hevcVideoName: $("#hevcVideoName"),
+    hevcEmpty: $("#hevcEmpty"),
+    hevcMode: $("#hevcMode"),
+    hevcQuality: $("#hevcQuality"),
+    hevcQualityLabel: $("#hevcQualityLabel"),
+    hevcKeepAudio: $("#hevcKeepAudio"),
+    hevcStartBtn: $("#hevcStartBtn"),
+    hevcStopBtn: $("#hevcStopBtn"),
+    hevcProgress: $("#hevcProgress"),
+    hevcProgressLabel: $("#hevcProgressLabel"),
+    hevcProgressPct: $("#hevcProgressPct"),
+    hevcProgressBar: $("#hevcProgressBar"),
+    hevcStatus: $("#hevcStatus"),
+    hevcHint: $("#hevcHint"),
+    hevcResults: $("#hevcResults"),
+    splitView: $("#splitView"),
+    splitVideo: $("#splitVideo"),
+    splitVideoInput: $("#splitVideoInput"),
+    splitVideoName: $("#splitVideoName"),
+    splitEmpty: $("#splitEmpty"),
+    splitTime: $("#splitTime"),
+    splitMode: $("#splitMode"),
+    splitStartBtn: $("#splitStartBtn"),
+    splitProgress: $("#splitProgress"),
+    splitProgressLabel: $("#splitProgressLabel"),
+    splitProgressPct: $("#splitProgressPct"),
+    splitProgressBar: $("#splitProgressBar"),
+    splitStatus: $("#splitStatus"),
+    splitHint: $("#splitHint"),
+    splitResults: $("#splitResults"),
     translateView: $("#translateView"),
     translateFileInput: $("#translateFileInput"),
     translateDrop: $("#translateDrop"),
@@ -670,6 +705,8 @@
     el.syncView.hidden = true;
     el.muxView.hidden = true;
     el.cutView.hidden = true;
+    el.splitView.hidden = true;
+    el.hevcView.hidden = true;
     el.translateView.hidden = true;
     el.syncVideo.pause();
     el.muxVideo.pause();
@@ -678,6 +715,8 @@
     el.tabSync.classList.remove("is-active");
     el.tabMux.classList.remove("is-active");
     el.tabCut.classList.remove("is-active");
+    el.tabSplit.classList.remove("is-active");
+    el.tabHevc.classList.remove("is-active");
     el.tabTranslate.classList.remove("is-active");
     try {
       const job = await api(`/api/jobs/${jobId}`);
@@ -725,11 +764,15 @@
     el.syncView.hidden = true;
     el.muxView.hidden = true;
     el.cutView.hidden = true;
+    el.splitView.hidden = true;
+    el.hevcView.hidden = true;
     el.translateView.hidden = true;
     el.tabExtract.classList.add("is-active");
     el.tabSync.classList.remove("is-active");
     el.tabMux.classList.remove("is-active");
     el.tabCut.classList.remove("is-active");
+    el.tabSplit.classList.remove("is-active");
+    el.tabHevc.classList.remove("is-active");
     el.tabTranslate.classList.remove("is-active");
     el.workspace.hidden = false;
     el.workspace.classList.add("is-empty");
@@ -4512,6 +4555,282 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     resetMuxOutput();
   }
 
+  function hevcQualityOptions() {
+    const hardware = el.hevcMode.value === "hardware";
+    el.hevcQualityLabel.textContent = hardware ? "目标码率" : "CRF 质量";
+    el.hevcQuality.replaceChildren();
+    const values = hardware
+      ? [["source", "保持源码率"], ["source75", "源码率 75%"], ["source50", "源码率 50% · 体积约减半"], ["3M", "3 Mbps · 更小"], ["4M", "4 Mbps · 固定"], ["6M", "6 Mbps · 更好"], ["8M", "8 Mbps · 高画质"]]
+      : [["28", "CRF 28 · 更小"], ["26", "CRF 26 · 推荐"], ["24", "CRF 24 · 更好"], ["22", "CRF 22 · 高画质"]];
+    values.forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value; option.textContent = label;
+      el.hevcQuality.append(option);
+    });
+    el.hevcQuality.value = hardware ? "source50" : "26";
+  }
+
+  function initHevc() {
+    el.tabHevc.addEventListener("click", () => switchAppTab("hevc"));
+    hevcQualityOptions();
+    el.hevcMode.addEventListener("change", () => {
+      hevcQualityOptions();
+      el.hevcHint.textContent = el.hevcMode.value === "hardware"
+        ? "硬件模式使用 VideoToolbox；源码率 50% 可把视频体积大约减半。"
+        : "软件模式使用 x265，体积更小但耗时明显更长。";
+    });
+    el.hevcVideoInput.addEventListener("change", () => {
+      const file = el.hevcVideoInput.files && el.hevcVideoInput.files[0];
+      if (!file) return;
+      if (window.hevcObjectUrl) URL.revokeObjectURL(window.hevcObjectUrl);
+      window.hevcObjectUrl = URL.createObjectURL(file);
+      el.hevcVideo.src = window.hevcObjectUrl;
+      el.hevcVideo.load();
+      el.hevcEmpty.hidden = true;
+      el.hevcVideoName.textContent = file.name;
+      el.hevcVideoInput.value = "";
+      el.hevcStartBtn.disabled = false;
+      el.hevcStopBtn.hidden = true;
+      el.hevcProgress.hidden = true;
+      el.hevcResults.innerHTML = '<p class="translate-empty">转码完成后会显示文件。</p>';
+      el.hevcStatus.textContent = "设置编码参数后开始。";
+    });
+    el.hevcStartBtn.addEventListener("click", hevcTranscodeFile);
+    el.hevcStopBtn.addEventListener("click", stopHevcTranscode);
+  }
+
+  async function stopHevcTranscode() {
+    if (!window.hevcToken) return;
+    el.hevcStopBtn.disabled = true;
+    el.hevcStopBtn.textContent = "正在停止…";
+    try {
+      await api(`/api/hevc/${window.hevcToken}/cancel`, { method: "POST" });
+      el.hevcStatus.textContent = "转码已停止，临时文件已清理。";
+      el.hevcProgress.hidden = true;
+      el.hevcStopBtn.hidden = true;
+      el.hevcStartBtn.disabled = false;
+      el.hevcStartBtn.textContent = "开始 H.265 转码";
+      toast("已停止转码", "success");
+    } catch (error) {
+      toast(error.message || "停止失败", "error");
+    } finally {
+      el.hevcStopBtn.disabled = false;
+      el.hevcStopBtn.textContent = "停止转码";
+    }
+  }
+
+  async function hevcTranscodeFile() {
+    if (!el.hevcVideo.src) {
+      toast("请先选择视频", "error");
+      return;
+    }
+    const blob = await fetch(el.hevcVideo.src).then((response) => response.blob());
+    const form = new FormData();
+    form.append("video", blob, el.hevcVideoName.textContent || "video.mp4");
+    form.append("mode", el.hevcMode.value);
+    form.append("keep_audio", el.hevcKeepAudio.checked ? "1" : "0");
+    if (el.hevcMode.value === "hardware") form.append("bitrate", el.hevcQuality.value);
+    else form.append("crf", el.hevcQuality.value);
+    el.hevcStartBtn.disabled = true;
+    el.hevcStartBtn.textContent = "正在转码…";
+    el.hevcStopBtn.hidden = false;
+    el.hevcProgress.hidden = false;
+    el.hevcProgressBar.style.width = "2%";
+    el.hevcProgressPct.textContent = "0%";
+    el.hevcStatus.textContent = "正在转码…";
+    try {
+      const response = await fetch("/api/hevc", { method: "POST", body: form });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || !data.token) throw new Error((data && data.error) || "转码失败");
+      window.hevcToken = data.token;
+      pollHevcStatus(data.token);
+    } catch (error) {
+      toast(error.message || "转码失败", "error");
+      el.hevcStartBtn.disabled = false;
+      el.hevcStartBtn.textContent = "开始 H.265 转码";
+      el.hevcStatus.textContent = error.message || "转码失败";
+    }
+  }
+
+  function pollHevcStatus(token) {
+    const tick = async () => {
+      try {
+        const data = await api(`/api/hevc/${token}/status`);
+        const pct = Math.round((Number(data.progress) || 0) * 100);
+        el.hevcProgressBar.style.width = `${pct}%`;
+        el.hevcProgressPct.textContent = `${pct}%`;
+        el.hevcProgressLabel.textContent = data.message || "正在转码…";
+        el.hevcStatus.textContent = data.message || "正在转码…";
+        if (data.stage === "done") {
+          el.hevcProgressBar.style.width = "100%";
+          el.hevcProgressPct.textContent = "100%";
+          const result = data.result || {};
+          el.hevcResults.innerHTML = "";
+          const row = document.createElement("div");
+          row.className = "split-result";
+          const name = document.createElement("b");
+          name.textContent = result.filename || "output_h265.mp4";
+          const meta = document.createElement("small");
+          meta.textContent = `已保存到 ${result.saved_path || "Downloads"} · ${(Number(result.size) / 1024 / 1024).toFixed(1)} MB`;
+          const link = document.createElement("a");
+          link.href = `/api/hevc/${token}/download`;
+          link.textContent = "再次下载";
+          row.append(name, meta, link);
+          el.hevcResults.append(row);
+          el.hevcStartBtn.disabled = false;
+          el.hevcStartBtn.textContent = "开始 H.265 转码";
+          el.hevcStopBtn.hidden = true;
+          el.hevcStatus.textContent = "转码完成，成品已保存到 Downloads。";
+          toast("H.265 转码完成", "success");
+          return;
+        }
+        if (data.stage === "cancelled") {
+          el.hevcStartBtn.disabled = false;
+          el.hevcStartBtn.textContent = "开始 H.265 转码";
+          el.hevcStopBtn.hidden = true;
+          el.hevcProgress.hidden = true;
+          el.hevcStatus.textContent = "转码已停止。";
+          return;
+        }
+        if (data.stage === "error") {
+          el.hevcStartBtn.disabled = false;
+          el.hevcStartBtn.textContent = "开始 H.265 转码";
+          el.hevcStopBtn.hidden = true;
+          el.hevcProgress.hidden = true;
+          el.hevcStatus.textContent = data.error || "转码失败";
+          toast(data.error || "转码失败", "error");
+          return;
+        }
+        setTimeout(tick, 600);
+      } catch (error) {
+        el.hevcStartBtn.disabled = false;
+        el.hevcStartBtn.textContent = "开始 H.265 转码";
+        el.hevcStatus.textContent = error.message || "无法读取转码进度";
+        toast(error.message || "无法读取转码进度", "error");
+      }
+    };
+    tick();
+  }
+
+  function initSplit() {
+    el.tabSplit.addEventListener("click", () => switchAppTab("split"));
+    el.splitVideoInput.addEventListener("change", () => {
+      const file = el.splitVideoInput.files && el.splitVideoInput.files[0];
+      if (!file) return;
+      if (window.splitObjectUrl) URL.revokeObjectURL(window.splitObjectUrl);
+      window.splitObjectUrl = URL.createObjectURL(file);
+      el.splitVideo.src = window.splitObjectUrl;
+      el.splitVideo.load();
+      el.splitEmpty.hidden = true;
+      el.splitVideoName.textContent = file.name;
+      el.splitVideoInput.value = "";
+      el.splitStartBtn.disabled = false;
+      el.splitProgress.hidden = true;
+      el.splitResults.innerHTML = '<p class="translate-empty">分割完成后会显示两个文件。</p>';
+      el.splitStatus.textContent = "读取视频时长…";
+    });
+    el.splitVideo.addEventListener("loadedmetadata", () => {
+      const duration = Number(el.splitVideo.duration) || 0;
+      if (duration > 0) {
+        el.splitTime.value = fmtCueTime(duration / 2);
+        el.splitHint.textContent = `视频时长 ${fmtCueTime(duration)}；输入分割时间后生成前后两段。`;
+        el.splitStatus.textContent = "设置分割点后开始。";
+      }
+    });
+    el.splitStartBtn.addEventListener("click", splitVideoFile);
+    el.splitMode.addEventListener("change", () => {
+      el.splitHint.textContent = el.splitMode.value === "precise"
+        ? "精确模式会重新编码，切点准确，耗时更长。"
+        : "快速模式按关键帧复制，速度更快，切点可能落在最近关键帧。";
+    });
+  }
+
+  async function splitVideoFile() {
+    if (!el.splitVideo.src) {
+      toast("请先选择视频", "error");
+      return;
+    }
+    const splitTime = parseCueTime(el.splitTime.value);
+    const duration = Number(el.splitVideo.duration) || 0;
+    if (splitTime == null || splitTime <= 0 || (duration && splitTime >= duration)) {
+      toast("分割时间必须在视频开始和结束之间", "error");
+      return;
+    }
+    const blob = await fetch(el.splitVideo.src).then((response) => response.blob());
+    const form = new FormData();
+    form.append("video", blob, el.splitVideoName.textContent || "video.ts");
+    form.append("split_time", String(splitTime));
+    form.append("mode", el.splitMode.value);
+    el.splitStartBtn.disabled = true;
+    el.splitStartBtn.textContent = "正在分割…";
+    el.splitProgress.hidden = false;
+    el.splitProgressBar.style.width = "2%";
+    el.splitProgressPct.textContent = "0%";
+    el.splitStatus.textContent = "正在分割…";
+    try {
+      const response = await fetch("/api/split", { method: "POST", body: form });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || !data.token) throw new Error((data && data.error) || "分割失败");
+      pollSplitStatus(data.token);
+    } catch (error) {
+      toast(error.message || "分割失败", "error");
+      el.splitStartBtn.disabled = false;
+      el.splitStartBtn.textContent = "分割为两个 TS";
+      el.splitStatus.textContent = error.message || "分割失败";
+    }
+  }
+
+  function pollSplitStatus(token) {
+    const tick = async () => {
+      try {
+        const data = await api(`/api/split/${token}/status`);
+        const pct = Math.round((Number(data.progress) || 0) * 100);
+        el.splitProgressBar.style.width = `${pct}%`;
+        el.splitProgressPct.textContent = `${pct}%`;
+        el.splitProgressLabel.textContent = data.message || "正在分割…";
+        el.splitStatus.textContent = data.message || "正在分割…";
+        if (data.stage === "done") {
+          el.splitProgressBar.style.width = "100%";
+          el.splitProgressPct.textContent = "100%";
+          el.splitResults.innerHTML = "";
+          (data.result.parts || []).forEach((part, index) => {
+            const row = document.createElement("div");
+            row.className = "split-result";
+            const name = document.createElement("b");
+            name.textContent = `第 ${index + 1} 段 · ${part.filename}`;
+            const meta = document.createElement("small");
+            meta.textContent = `已保存到 ${part.saved_path} · ${(Number(part.size) / 1024 / 1024).toFixed(1)} MB`;
+            const link = document.createElement("a");
+            link.href = `/api/split/${token}/download/${index + 1}`;
+            link.textContent = "再次下载";
+            row.append(name, meta, link);
+            el.splitResults.append(row);
+          });
+          el.splitStartBtn.disabled = false;
+          el.splitStartBtn.textContent = "分割为两个 TS";
+          el.splitStatus.textContent = "分割完成，两个 TS 已保存到 Downloads。";
+          toast("TS 分割完成", "success");
+          return;
+        }
+        if (data.stage === "error") {
+          el.splitStartBtn.disabled = false;
+          el.splitStartBtn.textContent = "分割为两个 TS";
+          el.splitProgress.hidden = true;
+          el.splitStatus.textContent = data.error || "分割失败";
+          toast(data.error || "分割失败", "error");
+          return;
+        }
+        setTimeout(tick, 500);
+      } catch (error) {
+        el.splitStartBtn.disabled = false;
+        el.splitStartBtn.textContent = "分割为两个 TS";
+        el.splitStatus.textContent = error.message || "无法读取分割进度";
+        toast(error.message || "无法读取分割进度", "error");
+      }
+    };
+    tick();
+  }
+
   function initTranslate() {
     el.translateNewTask.addEventListener("click", clearTranslateTask);
     el.translateDeleteSelected.addEventListener("click", deleteSelectedTranslateTasks);
@@ -4682,19 +5001,25 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     const sync = tab === "sync";
     const mux = tab === "mux";
     const cut = tab === "cut";
+    const split = tab === "split";
+    const hevc = tab === "hevc";
     const translate = tab === "translate";
-    el.tabExtract.classList.toggle("is-active", !sync && !mux && !cut && !translate);
+    el.tabExtract.classList.toggle("is-active", !sync && !mux && !cut && !split && !hevc && !translate);
     el.tabSync.classList.toggle("is-active", sync);
     el.tabMux.classList.toggle("is-active", mux);
     el.tabCut.classList.toggle("is-active", cut);
+    el.tabSplit.classList.toggle("is-active", split);
+    el.tabHevc.classList.toggle("is-active", hevc);
     el.tabTranslate.classList.toggle("is-active", translate);
     el.syncView.hidden = !sync;
     el.muxView.hidden = !mux;
     el.cutView.hidden = !cut;
+    el.splitView.hidden = !split;
+    el.hevcView.hidden = !hevc;
     el.translateView.hidden = !translate;
     refreshTaskRails();
     el.landing.hidden = true;
-    el.workspace.hidden = sync || mux || cut || translate;
+    el.workspace.hidden = sync || mux || cut || split || hevc || translate;
     if (sync) {
       el.video.pause();
       el.muxVideo.pause();
@@ -4710,6 +5035,18 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       el.video.pause();
       el.syncVideo.pause();
       el.muxVideo.pause();
+      window.scrollTo({ top: 0, behavior: "auto" });
+    } else if (split) {
+      el.video.pause();
+      el.syncVideo.pause();
+      el.muxVideo.pause();
+      el.cutVideo.pause();
+      window.scrollTo({ top: 0, behavior: "auto" });
+    } else if (hevc) {
+      el.video.pause();
+      el.syncVideo.pause();
+      el.muxVideo.pause();
+      el.cutVideo.pause();
       window.scrollTo({ top: 0, behavior: "auto" });
     } else if (translate) {
       el.video.pause();
@@ -5596,6 +5933,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     initMux();
     initCut();
     initTranslate();
+    initSplit();
+    initHevc();
     initFileDrops();
     initToolPlayers();
     setInterval(refreshTaskRails, 2500);
